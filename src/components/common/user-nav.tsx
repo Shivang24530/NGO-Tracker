@@ -15,23 +15,27 @@ import { LogOut, User, Settings } from 'lucide-react';
 import placeholderImages from '@/lib/placeholder-images.json';
 import { useSidebar } from '@/components/ui/sidebar';
 import { Button } from '../ui/button';
+import { useAuth, useUser } from '@/firebase';
 
 export function UserNav() {
   const userImage = placeholderImages.placeholderImages.find(
     (p) => p.id === 'user-avatar-priya'
   );
   const { state } = useSidebar();
+  const { user } = useUser();
+  const auth = useAuth();
+
 
   const userContent = (
     <>
       <Avatar className="h-8 w-8">
-        <AvatarImage src={userImage?.imageUrl} alt="Priya" />
-        <AvatarFallback>PS</AvatarFallback>
+        <AvatarImage src={user?.photoURL || userImage?.imageUrl} alt={user?.displayName || "User"} />
+        <AvatarFallback>{user?.displayName?.charAt(0) || 'U'}</AvatarFallback>
       </Avatar>
       <div className="text-left group-data-[collapsible=icon]:hidden">
-        <p className="text-sm font-medium leading-none text-sidebar-foreground">Priya Sharma</p>
+        <p className="text-sm font-medium leading-none text-sidebar-foreground">{user?.displayName || 'Field Worker'}</p>
         <p className="text-xs leading-none text-muted-foreground">
-          Field Worker
+          {user?.email || ''}
         </p>
       </div>
     </>
@@ -53,9 +57,9 @@ export function UserNav() {
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">Priya Sharma</p>
+            <p className="text-sm font-medium leading-none">{user?.displayName || 'Priya Sharma'}</p>
             <p className="text-xs leading-none text-muted-foreground">
-              priya@example.com
+              {user?.email || 'priya@example.com'}
             </p>
           </div>
         </DropdownMenuLabel>
@@ -71,12 +75,10 @@ export function UserNav() {
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <Link href="/" passHref>
-          <DropdownMenuItem>
+        <DropdownMenuItem onClick={() => auth.signOut()}>
             <LogOut className="mr-2 h-4 w-4" />
             <span>Log out</span>
-          </DropdownMenuItem>
-        </Link>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
