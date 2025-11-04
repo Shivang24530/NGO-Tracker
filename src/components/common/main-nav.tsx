@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Compass,
+  Heart,
   LayoutDashboard,
   UserPlus,
   ClipboardList,
@@ -11,6 +11,7 @@ import {
   BarChart3,
   FileText,
   Map,
+  Users
 } from 'lucide-react';
 import {
   SidebarHeader,
@@ -25,12 +26,13 @@ import { Separator } from '@/components/ui/separator';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/follow-ups', label: 'Follow-up Visits', icon: ClipboardList },
   { href: '/households/register', label: 'Register Family', icon: UserPlus },
-  { href: '/progress', label: 'Progress Tracking', icon: TrendingUp },
-  { href: '/analytics', label: 'Analytics', icon: BarChart3 },
-  { href: '/reports', label: 'Reports', icon: FileText },
+  { href: '/households', label: 'All Families', icon: Users },
   { href: '/map', label: 'Map Overview', icon: Map },
+  { href: '/follow-ups', label: 'Follow-up Visits', icon: ClipboardList },
+  { href: '/progress', label: 'Progress Tracking', icon: TrendingUp },
+  { href: '/reports', label: 'Quarterly Reports', icon: FileText },
+  { href: '/analytics', label: 'Analytics', icon: BarChart3 },
 ];
 
 export function MainNav() {
@@ -40,14 +42,20 @@ export function MainNav() {
     <>
       <SidebarHeader>
         <Link href="/dashboard" className="flex items-center gap-2">
-          <Compass className="w-8 h-8 text-background" />
-          <h1 className="text-xl font-bold font-headline text-background group-data-[collapsible=icon]:hidden">
-            Community Compass
-          </h1>
+          <div className="bg-white rounded-md p-1.5 flex items-center justify-center">
+            <Heart className="w-5 h-5 text-primary" />
+          </div>
+          <div className="flex flex-col group-data-[collapsible=icon]:hidden">
+            <h1 className="text-lg font-bold font-headline text-background">
+              NGO Tracker
+            </h1>
+            <p className="text-xs text-sidebar-foreground/80">Family Registration</p>
+          </div>
         </Link>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarMenu>
+        <div className='text-xs font-medium text-sidebar-foreground/60 px-4 mt-2 group-data-[collapsible=icon]:hidden'>NAVIGATION</div>
+        <SidebarMenu className='mt-2'>
           {navItems.map((item) => (
             <SidebarMenuItem key={item.href}>
               <Link href={item.href} passHref legacyBehavior>
