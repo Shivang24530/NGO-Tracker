@@ -12,7 +12,6 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
-import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { formatISO, addMonths } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
@@ -140,6 +139,9 @@ export function RegisterHouseholdForm() {
     if (isValid) {
       if (step < steps.length) {
         setStep((s) => s + 1);
+      } else {
+        // Final step, trigger submission
+        await form.handleSubmit(onSubmit)();
       }
     }
   };
@@ -338,7 +340,7 @@ export function RegisterHouseholdForm() {
                  <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => remove(index)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             ))}
-            <Button type="button" variant="outline" onClick={() => append({ name: '', age: 0, gender: 'Male', studyingStatus: 'Not Studying' })}><PlusCircle className="mr-2 h-4 w-4" />Add Child</Button>
+            <Button type="button" variant="outline" onClick={() => append({ name: '', age: 0, gender: 'Male', studyingStatus: 'Not Studying', currentClass: '', schoolName: '' })}><PlusCircle className="mr-2 h-4 w-4" />Add Child</Button>
           </div>
         );
       case 3:
@@ -395,15 +397,15 @@ export function RegisterHouseholdForm() {
                             <Button type="button" variant="secondary" onClick={handleBack}>Back</Button>
                         ) : <div></div>}
                         
-                        {step < steps.length ? (
-                            <Button type="button" onClick={handleNext} className="ml-auto">
-                                {nextButtonLabels[step-1]} <ArrowRight className="ml-2 h-4 w-4" />
-                            </Button>
-                        ) : (
-                            <Button type="submit" className="ml-auto font-headline">
-                                {nextButtonLabels[step-1]}
-                            </Button>
-                        )}
+                        <Button type="button" onClick={handleNext} className="ml-auto">
+                            {step < steps.length ? (
+                                <>
+                                {nextButtonLabels[step - 1]} <ArrowRight className="ml-2 h-4 w-4" />
+                                </>
+                            ) : (
+                                nextButtonLabels[step - 1]
+                            )}
+                        </Button>
                     </div>
                 </form>
             </CardContent>
