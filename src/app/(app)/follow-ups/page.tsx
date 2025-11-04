@@ -47,7 +47,7 @@ const VisitCard = ({ visitId }: { visitId: string }) => {
       <CardContent>
         <div className="text-sm text-muted-foreground space-y-2">
             <p className="flex items-center"><Clock className="mr-2 h-4 w-4" /> Last visit: {new Date(visit.visitDate).toLocaleDateString()}</p>
-            <p className="flex items-center"><CalendarCheck className="mr-2 h-4 w-4" /> Visit Type: <Badge variant="secondary" className="ml-2">{visit.visitType}</Badge></p>
+            <div className="flex items-center"><CalendarCheck className="mr-2 h-4 w-4" /> Visit Type: <Badge variant="secondary" className="ml-2">{visit.visitType}</Badge></div>
         </div>
       </CardContent>
       <CardFooter>
