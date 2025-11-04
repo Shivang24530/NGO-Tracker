@@ -25,10 +25,9 @@ export function initiateEmailSignUp(authInstance: Auth, email: string, password:
 export function initiateEmailSignIn(authInstance: Auth, email: string, password: string): void {
   // CRITICAL: Call signInWithEmailAndPassword directly. Do NOT use 'await signInWithEmailAndPassword(...)'.
   signInWithEmailAndPassword(authInstance, email, password).catch((error) => {
-    // If sign-in fails because the user is not found, create a new user.
-    if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-      createUserWithEmailAndPassword(authInstance, email, password);
-    }
+    // This is a good place to handle login errors, e.g., by showing a toast notification.
+    // For this app, errors are surfaced through the FirebaseErrorListener.
+    console.error("Login failed:", error);
   });
   // Code continues immediately. Auth state change is handled by onAuthStateChanged listener.
 }
