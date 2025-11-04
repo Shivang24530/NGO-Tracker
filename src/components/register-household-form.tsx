@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -46,7 +47,10 @@ const formSchema = z.object({
   familyName: z.string().min(3, 'Family name is required.'),
   fullAddress: z.string().min(10, 'Full address is required.'),
   locationArea: z.string().min(3, 'Location area is required.'),
-  primaryContact: z.string().min(10, 'A 10-digit mobile number is required.').max(10, 'A 10-digit mobile number is required.'),
+  primaryContact: z
+    .string()
+    .min(10, 'A valid contact number is required.')
+    .regex(/^[+]?[0-9]+$/, 'Contact number can only contain digits and an optional leading "+".'),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
 
@@ -286,3 +290,5 @@ export function RegisterHouseholdForm() {
     </Form>
   );
 }
+
+    
