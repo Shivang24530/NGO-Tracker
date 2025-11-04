@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import {
   Card,
@@ -11,22 +13,22 @@ import { households, children, followUpVisits } from '@/lib/data';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 
-const totalFamilies = households.length;
-const totalChildren = children.length;
-const childrenStudying = children.filter((c) => c.isStudying).length;
-const childrenNotStudying = totalChildren - childrenStudying;
-const visitsThisQuarter = followUpVisits.filter(
-  (v) => new Date(v.visitDate) > new Date().setMonth(new Date().getMonth() - 3)
-).length;
-
-const stats = [
-    { title: 'Total Families', value: totalFamilies, icon: Users, color: 'bg-orange-500', progress: 70 },
-    { title: 'Total Children', value: totalChildren, icon: Users, color: 'bg-pink-500', progress: 50 },
-    { title: 'Children Studying', value: childrenStudying, icon: TrendingUp, color: 'bg-green-500', progress: 80 },
-    { title: 'Visits This Quarter', value: visitsThisQuarter, icon: Clock, color: 'bg-purple-500', progress: 60 },
-];
-
 export default function Dashboard() {
+  const totalFamilies = households.length;
+  const totalChildren = children.length;
+  const childrenStudying = children.filter((c) => c.isStudying).length;
+  const childrenNotStudying = totalChildren - childrenStudying;
+  const visitsThisQuarter = followUpVisits.filter(
+    (v) => new Date(v.visitDate) > new Date().setMonth(new Date().getMonth() - 3)
+  ).length;
+  
+  const stats = [
+      { title: 'Total Families', value: totalFamilies, icon: Users, color: 'bg-orange-500', progress: 70 },
+      { title: 'Total Children', value: totalChildren, icon: Users, color: 'bg-pink-500', progress: 50 },
+      { title: 'Children Studying', value: childrenStudying, icon: TrendingUp, color: 'bg-green-500', progress: 80 },
+      { title: 'Visits This Quarter', value: visitsThisQuarter, icon: Clock, color: 'bg-purple-500', progress: 60 },
+  ];
+
   return (
     <div className="flex min-h-screen w-full flex-col">
        <PageHeader title="Welcome Back! 👋">

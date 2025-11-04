@@ -29,7 +29,6 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { MapPin, Camera, Trash2, PlusCircle, Loader2, Users, Home, Phone, ArrowRight } from 'lucide-react';
 import placeholderImages from '@/lib/placeholder-images.json';
-import { Checkbox } from './ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { cn } from '@/lib/utils';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
@@ -68,9 +67,9 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 const steps = [
-  { id: 1, title: 'Household Info' },
-  { id: 2, title: 'Children Details' },
-  { id: 3, title: 'Photos' },
+  { id: 1, title: 'Household Info', fields: ['familyName', 'fullAddress', 'locationArea', 'primaryContact'] as const },
+  { id: 2, title: 'Children Details', fields: ['children'] as const },
+  { id: 3, title: 'Photos', fields: [] as const },
 ];
 
 function Stepper({ currentStep }: { currentStep: number }) {
@@ -82,12 +81,12 @@ function Stepper({ currentStep }: { currentStep: number }) {
             <div
               className={cn(
                 'w-10 h-10 rounded-full flex items-center justify-center font-bold text-white transition-colors',
-                currentStep === step.id ? 'bg-primary' : 'bg-gray-300'
+                currentStep >= step.id ? 'bg-primary' : 'bg-gray-300'
               )}
             >
               {step.id}
             </div>
-            <p className={cn('mt-2 text-sm', currentStep === step.id ? 'text-primary font-semibold' : 'text-muted-foreground')}>
+            <p className={cn('mt-2 text-sm', currentStep >= step.id ? 'text-primary font-semibold' : 'text-muted-foreground')}>
               {step.title}
             </p>
           </div>
@@ -129,12 +128,13 @@ export function RegisterHouseholdForm() {
 
 
   const handleNext = async () => {
-    let fieldsToValidate: (keyof FormData)[] = [];
-    if (step === 1) fieldsToValidate = ['familyName', 'fullAddress', 'locationArea', 'primaryContact'];
-    if (step === 2) fieldsToValidate = ['children'];
-
-    const isValid = await form.trigger(fieldsToValidate);
-    if (isValid) setStep((s) => s + 1);
+    const currentStepFields = steps[step - 1].fields;
+    const isValid = await form.trigger(currentStepFields);
+    if (isValid) {
+        if (step < steps.length) {
+            setStep((s) => s + 1);
+        }
+    }
   };
 
   const handleBack = () => setStep((s) => s - 1);
@@ -216,7 +216,6 @@ export function RegisterHouseholdForm() {
       visits: [newVisit],
     };
 
-    // This is a mock implementation to simulate database update
     households.unshift(newHousehold);
     newChildren.forEach(child => children.push(child));
     followUpVisits.push(newVisit);
@@ -235,9 +234,9 @@ export function RegisterHouseholdForm() {
       case 1:
         return (
           <div className="space-y-6">
-            <FormField name="familyName" render={({ field }) => <FormItem><FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-primary" />Family Name *</FormLabel><FormControl><Input placeholder="e.g., Kumar Family" {...field} /></FormControl><FormMessage /></FormItem>} />
-            <FormField name="fullAddress" render={({ field }) => <FormItem><FormLabel className="flex items-center"><Home className="mr-2 h-4 w-4 text-primary" />Full Address *</FormLabel><FormControl><Input placeholder="Complete address with landmarks" {...field} /></FormControl><FormMessage /></FormItem>} />
-            <FormField name="locationArea" render={({ field }) => <FormItem><FormLabel className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-primary" />Location/Area *</FormLabel><FormControl><Input placeholder="e.g., Sector 15, Dharavi" {...field} /></FormControl><FormMessage /></FormItem>} />
+            <FormField name="familyName" control={form.control} render={({ field }) => <FormItem><FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-primary" />Family Name *</FormLabel><FormControl><Input placeholder="e.g., Kumar Family" {...field} /></FormControl><FormMessage /></FormItem>} />
+            <FormField name="fullAddress" control={form.control} render={({ field }) => <FormItem><FormLabel className="flex items-center"><Home className="mr-2 h-4 w-4 text-primary" />Full Address *</FormLabel><FormControl><Input placeholder="Complete address with landmarks" {...field} /></FormControl><FormMessage /></FormItem>} />
+            <FormField name="locationArea" control={form.control} render={({ field }) => <FormItem><FormLabel className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-primary" />Location/Area *</FormLabel><FormControl><Input placeholder="e.g., Sector 15, Dharavi" {...field} /></FormControl><FormMessage /></FormItem>} />
             <FormItem>
               <FormLabel className="flex items-center">GPS Location</FormLabel>
               <div className="flex items-center gap-4">
@@ -248,7 +247,7 @@ export function RegisterHouseholdForm() {
                 </Button>
               </div>
             </FormItem>
-            <FormField name="primaryContact" render={({ field }) => <FormItem><FormLabel className="flex items-center"><Phone className="mr-2 h-4 w-4 text-primary" />Primary Contact Number *</FormLabel><FormControl><Input placeholder="10-digit mobile number" {...field} /></FormControl><FormMessage /></FormItem>} />
+            <FormField name="primaryContact" control={form.control} render={({ field }) => <FormItem><FormLabel className="flex items-center"><Phone className="mr-2 h-4 w-4 text-primary" />Primary Contact Number *</FormLabel><FormControl><Input placeholder="10-digit mobile number" {...field} /></FormControl><FormMessage /></FormItem>} />
           </div>
         );
       case 2:
@@ -257,9 +256,9 @@ export function RegisterHouseholdForm() {
             {fields.map((field, index) => (
               <div key={field.id} className="border p-4 rounded-lg space-y-4 relative bg-secondary/30">
                  <div className="grid md:grid-cols-3 gap-4">
-                    <FormField name={`children.${index}.name`} render={({ field }) => <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
-                    <FormField name={`children.${index}.age`} render={({ field }) => <FormItem><FormLabel>Age</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>} />
-                    <FormField name={`children.${index}.gender`} render={({ field }) => <FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select><FormMessage /></FormItem>} />
+                    <FormField control={form.control} name={`children.${index}.name`} render={({ field }) => <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
+                    <FormField control={form.control} name={`children.${index}.age`} render={({ field }) => <FormItem><FormLabel>Age</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>} />
+                    <FormField control={form.control} name={`children.${index}.gender`} render={({ field }) => <FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select><FormMessage /></FormItem>} />
                  </div>
                  <FormField
                   control={form.control}
@@ -305,8 +304,8 @@ export function RegisterHouseholdForm() {
                 />
                  {watch(`children.${index}.studyingStatus`) === 'Studying' && (
                      <div className="grid md:grid-cols-2 gap-4">
-                         <FormField name={`children.${index}.currentClass`} render={({ field }) => <FormItem><FormLabel>Current Class</FormLabel><FormControl><Input placeholder="e.g., 2nd Class" {...field} /></FormControl><FormMessage /></FormItem>} />
-                         <FormField name={`children.${index}.schoolName`} render={({ field }) => <FormItem><FormLabel>School Name</FormLabel><FormControl><Input placeholder="e.g., Local Public School" {...field} /></FormControl><FormMessage /></FormItem>} />
+                         <FormField control={form.control} name={`children.${index}.currentClass`} render={({ field }) => <FormItem><FormLabel>Current Class</FormLabel><FormControl><Input placeholder="e.g., 2nd Class" {...field} /></FormControl><FormMessage /></FormItem>} />
+                         <FormField control={form.control} name={`children.${index}.schoolName`} render={({ field }) => <FormItem><FormLabel>School Name</FormLabel><FormControl><Input placeholder="e.g., Local Public School" {...field} /></FormControl><FormMessage /></FormItem>} />
                      </div>
                  )}
                  <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => remove(index)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
@@ -369,7 +368,7 @@ export function RegisterHouseholdForm() {
                             <Button type="button" variant="secondary" onClick={handleBack}>Back</Button>
                         ) : <div></div>}
                         
-                        {step < 3 ? (
+                        {step < steps.length ? (
                             <Button type="button" onClick={handleNext} className="ml-auto">
                                 {nextButtonLabels[step-1]} <ArrowRight className="ml-2 h-4 w-4" />
                             </Button>
