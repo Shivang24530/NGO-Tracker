@@ -32,12 +32,13 @@ import placeholderImages from '@/lib/placeholder-images.json';
 import { Checkbox } from './ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { cn } from '@/lib/utils';
+import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 
 const childSchema = z.object({
   name: z.string().min(2, 'Name is too short'),
   age: z.coerce.number().min(0).max(25),
   gender: z.enum(['Male', 'Female', 'Other']),
-  isStudying: z.boolean().default(false),
+  studyingStatus: z.enum(['Studying', 'Not Studying', 'Migrated']).default('Not Studying'),
   currentClass: z.string().optional(),
   schoolName: z.string().optional(),
 });
@@ -207,8 +208,49 @@ export function RegisterHouseholdForm() {
                     <FormField name={`children.${index}.age`} render={({ field }) => <FormItem><FormLabel>Age</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>} />
                     <FormField name={`children.${index}.gender`} render={({ field }) => <FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select><FormMessage /></FormItem>} />
                  </div>
-                 <FormField name={`children.${index}.isStudying`} render={({ field }) => <FormItem className="flex flex-row items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="!mt-0">Is the child studying?</FormLabel></FormItem>} />
-                 {watch(`children.${index}.isStudying`) && (
+                 <FormField
+                  control={form.control}
+                  name={`children.${index}.studyingStatus`}
+                  render={({ field }) => (
+                    <FormItem className="space-y-3">
+                      <FormLabel>Child Status</FormLabel>
+                      <FormControl>
+                        <RadioGroup
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          className="flex flex-col space-y-1"
+                        >
+                          <FormItem className="flex items-center space-x-3 space-y-0">
+                            <FormControl>
+                              <RadioGroupItem value="Studying" />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              Studying
+                            </FormLabel>
+                          </FormItem>
+                          <FormItem className="flex items-center space-x-3 space-y-0">
+                            <FormControl>
+                              <RadioGroupItem value="Not Studying" />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              Not Studying
+                            </FormLabel>
+                          </FormItem>
+                          <FormItem className="flex items-center space-x-3 space-y-0">
+                            <FormControl>
+                              <RadioGroupItem value="Migrated" />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              Migrated
+                            </FormLabel>
+                          </FormItem>
+                        </RadioGroup>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 {watch(`children.${index}.studyingStatus`) === 'Studying' && (
                      <div className="grid md:grid-cols-2 gap-4">
                          <FormField name={`children.${index}.currentClass`} render={({ field }) => <FormItem><FormLabel>Current Class</FormLabel><FormControl><Input placeholder="e.g., 2nd Class" {...field} /></FormControl><FormMessage /></FormItem>} />
                          <FormField name={`children.${index}.schoolName`} render={({ field }) => <FormItem><FormLabel>School Name</FormLabel><FormControl><Input placeholder="e.g., Local Public School" {...field} /></FormControl><FormMessage /></FormItem>} />
@@ -217,7 +259,7 @@ export function RegisterHouseholdForm() {
                  <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => remove(index)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             ))}
-            <Button type="button" variant="outline" onClick={() => append({ name: '', age: 0, gender: 'Male', isStudying: false })}><PlusCircle className="mr-2 h-4 w-4" />Add Child</Button>
+            <Button type="button" variant="outline" onClick={() => append({ name: '', age: 0, gender: 'Male', studyingStatus: 'Not Studying' })}><PlusCircle className="mr-2 h-4 w-4" />Add Child</Button>
           </div>
         );
       case 3:
@@ -290,5 +332,3 @@ export function RegisterHouseholdForm() {
     </Form>
   );
 }
-
-    
