@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState } from 'react';
@@ -7,6 +6,14 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import {
+  collection,
+  doc,
+  writeBatch,
+} from 'firebase/firestore';
+import { useFirestore, useUser } from '@/firebase';
+import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { formatISO, addMonths } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -32,8 +39,6 @@ import placeholderImages from '@/lib/placeholder-images.json';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { cn } from '@/lib/utils';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
-import { households, children, followUpVisits } from '@/lib/data';
-import { formatISO, addMonths } from 'date-fns';
 
 const childSchema = z.object({
   name: z.string().min(2, 'Name is too short'),
@@ -102,6 +107,8 @@ function Stepper({ currentStep }: { currentStep: number }) {
 
 export function RegisterHouseholdForm() {
   const router = useRouter();
+  const firestore = useFirestore();
+  const { user } = useUser();
   const [step, setStep] = useState(1);
   const [isLocating, setIsLocating] = useState(false);
   const [isCapturing, setIsCapturing] = useState<'family' | 'house' | null>(null);
@@ -131,9 +138,9 @@ export function RegisterHouseholdForm() {
     const currentStepFields = steps[step - 1].fields;
     const isValid = await form.trigger(currentStepFields);
     if (isValid) {
-        if (step < steps.length) {
-            setStep((s) => s + 1);
-        }
+      if (step < steps.length) {
+        setStep((s) => s + 1);
+      }
     }
   };
 
@@ -170,63 +177,83 @@ export function RegisterHouseholdForm() {
   };
 
 
-  function onSubmit(values: FormData) {
-    const today = new Date();
-    const newHouseholdId = `h${households.length + 1}`;
-    
-    const newChildren = values.children.map((child, index) => ({
-      id: `c${children.length + 1 + index}`,
-      householdId: newHouseholdId,
-      name: child.name,
-      age: child.age,
-      gender: child.gender,
-      isStudying: child.studyingStatus === 'Studying',
-      currentClass: child.currentClass || 'N/A',
-      schoolName: child.schoolName || 'N/A',
-    }));
+  async function onSubmit(values: FormData) {
+    if (!user) {
+        toast({
+            variant: "destructive",
+            title: "Authentication Error",
+            description: "You must be logged in to register a family.",
+        });
+        return;
+    }
 
-    const newVisitId = `v${followUpVisits.length + 1}`;
-    const newVisit = {
-      id: newVisitId,
-      householdId: newHouseholdId,
-      visitDate: formatISO(today),
-      visitType: 'Quarterly' as const,
-      visitedBy: 'Priya Sharma', // Assuming current user
-      status: 'Completed' as const,
-      childProgressUpdates: [],
-    };
-    
-    const newHousehold = {
-      id: newHouseholdId,
-      familyName: values.familyName,
-      fullAddress: values.fullAddress,
-      locationArea: values.locationArea,
-      primaryContact: values.primaryContact,
-      status: 'Active' as const,
-      nextFollowupDue: formatISO(addMonths(today, 3)),
-      latitude: values.latitude || 28.7041,
-      longitude: values.longitude || 77.1025,
-      familyPhotoUrl: values.familyPhotoUrl || 'https://picsum.photos/seed/h-new/600/400',
-      housePhotoUrl: values.housePhotoUrl || 'https://picsum.photos/seed/h-new-house/600/400',
-      toiletAvailable: false, // Default value
-      waterSupply: 'Other' as const, // Default value
-      electricity: false, // Default value
-      annualIncome: 0, // Default value
-      children: newChildren,
-      visits: [newVisit],
-    };
+    try {
+        const batch = writeBatch(firestore);
+        const today = new Date();
+        
+        // Use user's UID for the household ID to enforce ownership
+        const householdRef = doc(firestore, 'households', user.uid);
 
-    households.unshift(newHousehold);
-    newChildren.forEach(child => children.push(child));
-    followUpVisits.push(newVisit);
+        const newHouseholdData = {
+          id: user.uid, // Household ID is the user's UID
+          familyName: values.familyName,
+          fullAddress: values.fullAddress,
+          locationArea: values.locationArea,
+          primaryContact: values.primaryContact,
+          status: 'Active' as const,
+          nextFollowupDue: formatISO(addMonths(today, 3)),
+          latitude: values.latitude || 28.7041,
+          longitude: values.longitude || 77.1025,
+          familyPhotoUrl: values.familyPhotoUrl || 'https://picsum.photos/seed/h-new/600/400',
+          housePhotoUrl: values.housePhotoUrl || 'https://picsum.photos/seed/h-new-house/600/400',
+          toiletAvailable: false,
+          waterSupply: 'Other' as const,
+          electricity: false,
+          annualIncome: 0,
+        };
 
-    console.log('New household added:', newHousehold);
-    
-    toast({
-      title: 'Registration Complete!',
-      description: `The ${values.familyName} has been added to the system.`,
-    });
-    router.push('/dashboard');
+        batch.set(householdRef, newHouseholdData);
+
+        values.children.forEach(child => {
+            const childRef = doc(collection(householdRef, 'children'));
+            batch.set(childRef, {
+                id: childRef.id,
+                householdId: user.uid,
+                name: child.name,
+                age: child.age,
+                gender: child.gender,
+                isStudying: child.studyingStatus === 'Studying',
+                currentClass: child.currentClass || 'N/A',
+                schoolName: child.schoolName || 'N/A',
+            });
+        });
+
+        const visitRef = doc(collection(householdRef, 'followUpVisits'));
+        batch.set(visitRef, {
+            id: visitRef.id,
+            householdId: user.uid,
+            visitDate: formatISO(today),
+            visitType: 'Quarterly' as const,
+            visitedBy: user.displayName || 'Priya Sharma',
+            status: 'Completed' as const,
+            notes: 'Initial registration visit.',
+        });
+
+        await batch.commit();
+
+        toast({
+            title: 'Registration Complete!',
+            description: `The ${values.familyName} has been added to the system.`,
+        });
+        router.push('/dashboard');
+    } catch (error) {
+        console.error("Error registering family:", error);
+        toast({
+            variant: "destructive",
+            title: "Registration Failed",
+            description: "An error occurred while saving the data. Please try again.",
+        });
+    }
   }
 
   const renderStepContent = () => {

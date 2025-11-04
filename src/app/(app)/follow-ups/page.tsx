@@ -1,3 +1,4 @@
+'use client';
 import Link from 'next/link';
 import { PageHeader } from '@/components/common/page-header';
 import { Button } from '@/components/ui/button';
@@ -10,19 +11,14 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { followUpVisits, households } from '@/lib/data';
 import { differenceInDays, parseISO, isWithinInterval, startOfMonth, endOfMonth } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Clock, CalendarCheck, AlertTriangle } from 'lucide-react';
+import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import type { Household, FollowUpVisit } from '@/lib/types';
+import { collection, query, where, collectionGroup } from 'firebase/firestore';
 
-const overdue = followUpVisits.filter((v) => v.status === 'Overdue');
-const upcoming = followUpVisits.filter(
-  (v) => isWithinInterval(parseISO(v.visitDate), { start: startOfMonth(new Date()), end: endOfMonth(new Date()) }) && v.status === 'Pending'
-);
-
-const VisitCard = ({ visitId }: { visitId: string }) => {
-  const visit = followUpVisits.find(v => v.id === visitId);
-  const household = households.find(h => h.id === visit?.householdId);
+const VisitCard = ({ visit, household }: { visit: FollowUpVisit, household: Household | undefined }) => {
 
   if (!visit || !household) {
     return null;
@@ -60,6 +56,30 @@ const VisitCard = ({ visitId }: { visitId: string }) => {
 };
 
 export default function FollowUpsPage() {
+  const firestore = useFirestore();
+  const { user } = useUser();
+
+  const visitsQuery = useMemoFirebase(
+    () => user ? query(collectionGroup(firestore, 'followUpVisits')) : null,
+    [firestore, user]
+  );
+  const { data: followUpVisits, isLoading: visitsLoading } = useCollection<FollowUpVisit>(visitsQuery);
+  
+  const householdsQuery = useMemoFirebase(
+    () => user ? query(collection(firestore, 'households')) : null,
+    [firestore, user]
+  );
+  const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
+  
+  const overdue = followUpVisits?.filter((v) => v.status === 'Overdue') ?? [];
+  const upcoming = followUpVisits?.filter(
+    (v) => isWithinInterval(parseISO(v.visitDate), { start: startOfMonth(new Date()), end: endOfMonth(new Date()) }) && v.status === 'Pending'
+  ) ?? [];
+
+  const isLoading = visitsLoading || householdsLoading;
+
+  const findHousehold = (householdId: string) => households?.find(h => h.id === householdId);
+
   return (
     <div className="flex min-h-screen w-full flex-col">
       <PageHeader title="Follow-Up Visits" />
@@ -67,16 +87,16 @@ export default function FollowUpsPage() {
         <Tabs defaultValue="overdue" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="overdue">
-              Overdue Visits ({overdue.length})
+              Overdue Visits ({isLoading ? '...' : overdue.length})
             </TabsTrigger>
             <TabsTrigger value="upcoming">
-              Upcoming This Month ({upcoming.length})
+              Upcoming This Month ({isLoading ? '...' : upcoming.length})
             </TabsTrigger>
           </TabsList>
           <TabsContent value="overdue">
-            {overdue.length > 0 ? (
+            {isLoading ? <p className="text-center py-16">Loading...</p> : overdue.length > 0 ? (
                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mt-4">
-                    {overdue.map((visit) => <VisitCard key={visit.id} visitId={visit.id} />)}
+                    {overdue.map((visit) => <VisitCard key={visit.id} visit={visit} household={findHousehold(visit.householdId)} />)}
                 </div>
             ) : (
                 <div className="text-center py-16 text-muted-foreground">
@@ -87,9 +107,9 @@ export default function FollowUpsPage() {
             )}
           </TabsContent>
           <TabsContent value="upcoming">
-            {upcoming.length > 0 ? (
+             {isLoading ? <p className="text-center py-16">Loading...</p> : upcoming.length > 0 ? (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mt-4">
-                    {upcoming.map((visit) => <VisitCard key={visit.id} visitId={visit.id} />)}
+                    {upcoming.map((visit) => <VisitCard key={visit.id} visit={visit} household={findHousehold(visit.householdId)} />)}
                 </div>
             ) : (
                 <div className="text-center py-16 text-muted-foreground">

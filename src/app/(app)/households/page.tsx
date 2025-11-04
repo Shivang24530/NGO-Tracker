@@ -8,7 +8,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { households } from '@/lib/data';
 import {
   Card,
   CardContent,
@@ -20,8 +19,20 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import type { Household } from '@/lib/types';
+import { collection, query } from 'firebase/firestore';
 
 export default function AllHouseholdsPage() {
+  const firestore = useFirestore();
+  const { user } = useUser();
+
+  const householdsQuery = useMemoFirebase(
+    () => user ? query(collection(firestore, 'households')) : null,
+    [firestore, user]
+  );
+  const { data: households, isLoading } = useCollection<Household>(householdsQuery);
+
   return (
     <div className="flex min-h-screen w-full flex-col">
       <PageHeader title="All Families" />
@@ -45,7 +56,21 @@ export default function AllHouseholdsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {households.map((household) => (
+                {isLoading && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center">
+                      Loading families...
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!isLoading && households?.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center">
+                      No families registered yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {households?.map((household) => (
                   <TableRow key={household.id}>
                     <TableCell className="font-medium">{household.familyName}</TableCell>
                     <TableCell>{household.locationArea}</TableCell>
