@@ -21,14 +21,14 @@ import { ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
 import type { Household } from '@/lib/types';
-import { collection, query } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 
 export default function AllHouseholdsPage() {
   const firestore = useFirestore();
   const { user } = useUser();
 
   const householdsQuery = useMemoFirebase(
-    () => (user?.uid ? query(collection(firestore, 'households')) : null),
+    () => (user?.uid ? query(collection(firestore, 'households'), where('id', '==', user.uid)) : null),
     [firestore, user]
   );
   const { data: households, isLoading } = useCollection<Household>(householdsQuery);
@@ -85,7 +85,7 @@ export default function AllHouseholdsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                        <Button asChild variant="ghost" size="sm">
-                          <Link href="#">
+                          <Link href={`/households/${household.id}`}>
                             View Details <ArrowRight className="ml-2 h-4 w-4" />
                           </Link>
                        </Button>
