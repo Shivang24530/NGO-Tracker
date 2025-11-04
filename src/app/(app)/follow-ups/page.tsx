@@ -24,7 +24,7 @@ const VisitCard = ({ visit, household }: { visit: FollowUpVisit, household: Hous
     return null;
   }
 
-  const daysOverdue = differenceInDays(new Date(), parseISO(visit.visitDate));
+  const daysOverdue = differenceInDays(new Date(), new Date(visit.visitDate));
 
   return (
     <Card className="shadow-md hover:shadow-lg transition-shadow">
@@ -60,20 +60,20 @@ export default function FollowUpsPage() {
   const { user } = useUser();
 
   const visitsQuery = useMemoFirebase(
-    () => user ? query(collectionGroup(firestore, 'followUpVisits')) : null,
+    () => user ? query(collectionGroup(firestore, 'followUpVisits'), where('householdId', '==', user.uid)) : null,
     [firestore, user]
   );
   const { data: followUpVisits, isLoading: visitsLoading } = useCollection<FollowUpVisit>(visitsQuery);
   
   const householdsQuery = useMemoFirebase(
-    () => user ? query(collection(firestore, 'households')) : null,
+    () => user ? query(collection(firestore, 'households'), where('id', '==', user.uid)) : null,
     [firestore, user]
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
   
   const overdue = followUpVisits?.filter((v) => v.status === 'Overdue') ?? [];
   const upcoming = followUpVisits?.filter(
-    (v) => isWithinInterval(parseISO(v.visitDate), { start: startOfMonth(new Date()), end: endOfMonth(new Date()) }) && v.status === 'Pending'
+    (v) => isWithinInterval(new Date(v.visitDate), { start: startOfMonth(new Date()), end: endOfMonth(new Date()) }) && v.status === 'Pending'
   ) ?? [];
 
   const isLoading = visitsLoading || householdsLoading;
