@@ -60,10 +60,7 @@ export function MainNav() {
             <SidebarMenuItem key={item.href}>
               <Link href={item.href}>
                 <SidebarMenuButton
-                  isActive={
-                    pathname === item.href ||
-                    (item.href !== '/dashboard' && pathname.startsWith(item.href))
-                  }
+                  isActive={pathname === item.href}
                   tooltip={item.label}
                   className="justify-start"
                 >

@@ -33,10 +33,12 @@ import { Checkbox } from './ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { cn } from '@/lib/utils';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+import { households, children, followUpVisits } from '@/lib/data';
+import { formatISO, addMonths } from 'date-fns';
 
 const childSchema = z.object({
   name: z.string().min(2, 'Name is too short'),
-  age: z.coerce.number().min(0).max(25),
+  age: z.coerce.number().min(0, 'Age cannot be negative').max(25),
   gender: z.enum(['Male', 'Female', 'Other']),
   studyingStatus: z.enum(['Studying', 'Not Studying', 'Migrated']).default('Not Studying'),
   currentClass: z.string().optional(),
@@ -169,7 +171,58 @@ export function RegisterHouseholdForm() {
 
 
   function onSubmit(values: FormData) {
-    console.log(values);
+    const today = new Date();
+    const newHouseholdId = `h${households.length + 1}`;
+    
+    const newChildren = values.children.map((child, index) => ({
+      id: `c${children.length + 1 + index}`,
+      householdId: newHouseholdId,
+      name: child.name,
+      age: child.age,
+      gender: child.gender,
+      isStudying: child.studyingStatus === 'Studying',
+      currentClass: child.currentClass || 'N/A',
+      schoolName: child.schoolName || 'N/A',
+    }));
+
+    const newVisitId = `v${followUpVisits.length + 1}`;
+    const newVisit = {
+      id: newVisitId,
+      householdId: newHouseholdId,
+      visitDate: formatISO(today),
+      visitType: 'Quarterly' as const,
+      visitedBy: 'Priya Sharma', // Assuming current user
+      status: 'Completed' as const,
+      childProgressUpdates: [],
+    };
+    
+    const newHousehold = {
+      id: newHouseholdId,
+      familyName: values.familyName,
+      fullAddress: values.fullAddress,
+      locationArea: values.locationArea,
+      primaryContact: values.primaryContact,
+      status: 'Active' as const,
+      nextFollowupDue: formatISO(addMonths(today, 3)),
+      latitude: values.latitude || 28.7041,
+      longitude: values.longitude || 77.1025,
+      familyPhotoUrl: values.familyPhotoUrl || 'https://picsum.photos/seed/h-new/600/400',
+      housePhotoUrl: values.housePhotoUrl || 'https://picsum.photos/seed/h-new-house/600/400',
+      toiletAvailable: false, // Default value
+      waterSupply: 'Other' as const, // Default value
+      electricity: false, // Default value
+      annualIncome: 0, // Default value
+      children: newChildren,
+      visits: [newVisit],
+    };
+
+    // This is a mock implementation to simulate database update
+    households.unshift(newHousehold);
+    newChildren.forEach(child => children.push(child));
+    followUpVisits.push(newVisit);
+
+    console.log('New household added:', newHousehold);
+    
     toast({
       title: 'Registration Complete!',
       description: `The ${values.familyName} has been added to the system.`,
