@@ -60,13 +60,13 @@ export default function FollowUpsPage() {
   const { user } = useUser();
 
   const visitsQuery = useMemoFirebase(
-    () => user ? query(collectionGroup(firestore, 'followUpVisits'), where('householdId', '==', user.uid)) : null,
+    () => (user ? collectionGroup(firestore, 'followUpVisits') : null),
     [firestore, user]
   );
   const { data: followUpVisits, isLoading: visitsLoading } = useCollection<FollowUpVisit>(visitsQuery);
   
   const householdsQuery = useMemoFirebase(
-    () => user ? query(collection(firestore, 'households'), where('id', '==', user.uid)) : null,
+    () => (user ? collection(firestore, 'households') : null),
     [firestore, user]
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);

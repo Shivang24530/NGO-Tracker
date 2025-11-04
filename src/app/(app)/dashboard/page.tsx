@@ -20,7 +20,7 @@ export default function Dashboard() {
   const { user } = useUser();
 
   const householdsQuery = useMemoFirebase(
-    () => user ? query(collection(firestore, 'households'), where('id', '!=', '')) : null,
+    () => user ? query(collection(firestore, 'households')) : null,
     [firestore, user]
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
@@ -38,7 +38,7 @@ export default function Dashboard() {
   const { data: followUpVisits, isLoading: visitsLoading } = useCollection<FollowUpVisit>(visitsQuery);
 
   const recentRegistrationsQuery = useMemoFirebase(
-    () => user ? query(collection(firestore, 'households'), where('id', '!=', ''), limit(5)) : null,
+    () => user ? query(collection(firestore, 'households'), limit(5)) : null,
     [firestore, user]
   );
   const { data: recentRegistrations, isLoading: recentRegistrationsLoading } = useCollection<Household>(recentRegistrationsQuery);
@@ -49,7 +49,7 @@ export default function Dashboard() {
   const childrenStudying = children?.filter((c) => c.isStudying).length ?? 0;
   const childrenNotStudying = totalChildren - childrenStudying;
   const visitsThisQuarter = followUpVisits?.filter(
-    (v) => new Date(v.visitDate) > new Date().setMonth(new Date().getMonth() - 3)
+    (v) => new Date(v.visitDate) > new Date(new Date().setMonth(new Date().getMonth() - 3))
   ).length ?? 0;
 
   const stats = [
