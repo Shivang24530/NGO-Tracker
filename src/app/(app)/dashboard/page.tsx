@@ -20,25 +20,25 @@ export default function Dashboard() {
   const { user } = useUser();
 
   const householdsQuery = useMemoFirebase(
-    () => user ? query(collection(firestore, 'households')) : null,
+    () => (user?.uid ? query(collection(firestore, 'households')) : null),
     [firestore, user]
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
   const childrenQuery = useMemoFirebase(
-    () => user ? query(collection(firestore, 'households', user.uid, 'children')) : null,
+    () => (user?.uid ? query(collection(firestore, 'households', user.uid, 'children')) : null),
     [firestore, user]
   );
   const { data: children, isLoading: childrenLoading } = useCollection<Child>(childrenQuery);
   
   const visitsQuery = useMemoFirebase(
-    () => user ? query(collection(firestore, 'households', user.uid, 'followUpVisits')) : null,
+    () => (user?.uid ? query(collection(firestore, 'households', user.uid, 'followUpVisits')) : null),
     [firestore, user]
   );
   const { data: followUpVisits, isLoading: visitsLoading } = useCollection<FollowUpVisit>(visitsQuery);
 
   const recentRegistrationsQuery = useMemoFirebase(
-    () => user ? query(collection(firestore, 'households'), limit(5)) : null,
+    () => (user?.uid ? query(collection(firestore, 'households'), limit(5)) : null),
     [firestore, user]
   );
   const { data: recentRegistrations, isLoading: recentRegistrationsLoading } = useCollection<Household>(recentRegistrationsQuery);
