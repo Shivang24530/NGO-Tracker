@@ -141,26 +141,29 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
     }
 
     try {
-        const childRef = doc(firestore, 'households', household.id, 'children', childToDelete.id);
-        
-        // Batch delete child and their progress updates
-        const batch = writeBatch(firestore);
+      const childRef = doc(firestore, 'households', household.id, 'children', childToDelete.id);
+      const progressUpdatesQuery = query(collection(childRef, 'childProgressUpdates'));
 
-        const progressUpdatesQuery = query(collection(childRef, 'childProgressUpdates'));
-        const progressUpdatesSnapshot = await getDocs(progressUpdatesQuery);
+      // 1. Delete all progress updates in a batch
+      const progressUpdatesSnapshot = await getDocs(progressUpdatesQuery);
+      if (!progressUpdatesSnapshot.empty) {
+        const deleteProgressBatch = writeBatch(firestore);
         progressUpdatesSnapshot.forEach(doc => {
-            batch.delete(doc.ref);
+          deleteProgressBatch.delete(doc.ref);
         });
+        await deleteProgressBatch.commit();
+      }
 
-        batch.delete(childRef);
+      // 2. After progress updates are gone, delete the child document itself
+      await deleteDoc(childRef);
 
-        await batch.commit();
+      // 3. Remove from UI after successful DB deletion
+      remove(index);
+      toast({
+        title: 'Child Deleted',
+        description: `${childToDelete.name} has been removed from the family.`,
+      });
 
-        remove(index); // Remove from UI after successful DB deletion
-        toast({
-            title: 'Child Deleted',
-            description: `${childToDelete.name} has been removed from the family.`,
-        });
     } catch (error) {
         console.error("Error deleting child:", error);
         toast({
@@ -332,5 +335,3 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
     </Form>
   );
 }
-
-    
