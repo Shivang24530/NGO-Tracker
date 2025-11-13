@@ -1,3 +1,4 @@
+
 'use client';
 import { PageHeader } from '@/components/common/page-header';
 import {
@@ -22,73 +23,95 @@ import { ArrowRight, ArrowLeft } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
 import type { Household } from '@/lib/types';
-import { collection, query, where, orderBy, limit, startAfter, endBefore, limitToLast, DocumentSnapshot } from 'firebase/firestore';
-import { useState } from 'react';
+import { collection, query, orderBy, limit, startAfter, endBefore, limitToLast, getDocs, Query, DocumentData } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
 
 export default function AllHouseholdsPage() {
   const firestore = useFirestore();
-  const { user } = useUser();
-  const [lastVisible, setLastVisible] = useState<DocumentSnapshot | null>(null);
-  const [firstVisible, setFirstVisible] = useState<DocumentSnapshot | null>(null);
+  const { user, isUserLoading } = useUser();
+  const [lastVisible, setLastVisible] = useState<any | null>(null);
+  const [firstVisible, setFirstVisible] = useState<any | null>(null);
   const [page, setPage] = useState(1);
+  const [households, setHouseholds] = useState<Household[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isPaginating, setIsPaginating] = useState(false);
+  const [hasNextPage, setHasNextPage] = useState(false);
+
   const pageSize = 20;
 
-  const getHouseholdsQuery = (direction: 'next' | 'prev' | 'first') => {
-    if (!user?.uid) return null;
-    const baseQuery = collection(firestore, 'households');
-    const constraints = [where('id', '==', user.uid), orderBy('familyName')];
+  const buildQuery = (direction?: 'next' | 'prev'): Query<DocumentData> | null => {
+    if (!user) return null;
+    
+    const baseCollection = collection(firestore, 'households');
+    let q = query(baseCollection, orderBy('familyName'), limit(pageSize));
 
     if (direction === 'next' && lastVisible) {
-      return query(baseQuery, ...constraints, startAfter(lastVisible), limit(pageSize));
+      q = query(baseCollection, orderBy('familyName'), startAfter(lastVisible), limit(pageSize));
+    } else if (direction === 'prev' && firstVisible) {
+      q = query(baseCollection, orderBy('familyName'), endBefore(firstVisible), limitToLast(pageSize));
     }
-    if (direction === 'prev' && firstVisible) {
-      return query(baseQuery, ...constraints, endBefore(firstVisible), limitToLast(pageSize));
+
+    return q;
+  };
+  
+  const fetchHouseholds = async (direction?: 'next' | 'prev') => {
+    if (!user) return;
+    const paginating = direction === 'next' || direction === 'prev';
+    if(paginating) setIsPaginating(true);
+    else setIsLoading(true);
+
+    const q = buildQuery(direction);
+    if (!q) {
+       if(paginating) setIsPaginating(false);
+       else setIsLoading(false);
+      return;
+    };
+
+    try {
+      const documentSnapshots = await getDocs(q);
+      const fetchedHouseholds = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() } as Household));
+      
+      // We only want the household that matches the user's ID
+      const userHousehold = fetchedHouseholds.filter(h => h.id === user.uid);
+      
+      setHouseholds(userHousehold);
+      setHasNextPage(fetchedHouseholds.length === pageSize);
+
+      if (documentSnapshots.docs.length > 0) {
+        setFirstVisible(documentSnapshots.docs[0]);
+        setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
+      }
+    } catch (error) {
+      console.error("Error fetching households:", error);
+    } finally {
+      if(paginating) setIsPaginating(false);
+      else setIsLoading(false);
     }
-    return query(baseQuery, ...constraints, limit(pageSize));
   };
 
-  const [currentQuery, setCurrentQuery] = useState(() => getHouseholdsQuery('first'));
-  
-  const { data: households, isLoading } = useCollection<Household>(useMemoFirebase(() => currentQuery, [currentQuery]));
+  useEffect(() => {
+    if (user) {
+      fetchHouseholds();
+    } else if (!isUserLoading) {
+      setIsLoading(false);
+    }
+  }, [user, isUserLoading]);
 
   const handleNext = () => {
-    if (households && households.length > 0) {
-      const lastDoc = households[households.length - 1] as any;
-       // This is a bit of a hack because our useCollection doesn't give us snapshots back
-      setLastVisible({ id: lastDoc.id, data: () => lastDoc, exists: () => true } as DocumentSnapshot);
-      setCurrentQuery(getHouseholdsQuery('next'));
+    if (hasNextPage) {
       setPage(page + 1);
+      fetchHouseholds('next');
     }
   };
 
   const handlePrevious = () => {
-    if (households && households.length > 0) {
-      const firstDoc = households[0] as any;
-       setFirstVisible({ id: firstDoc.id, data: () => firstDoc, exists: () => true } as DocumentSnapshot);
-      setCurrentQuery(getHouseholdsQuery('prev'));
+    if (page > 1) {
       setPage(page - 1);
+      fetchHouseholds('prev');
     }
   };
-  
-    // This effect is a workaround to get the document snapshots for pagination
-  // because useCollection doesn't expose them. This is not ideal.
-  const { data: snapshotHouseholds } = useCollection<{id: string, familyName: string}>(useMemoFirebase(() => currentQuery, [currentQuery]));
-  
-  const updateSnapshots = () => {
-      if (snapshotHouseholds && snapshotHouseholds.length > 0) {
-          setFirstVisible(snapshotHouseholds[0] as any);
-          setLastVisible(snapshotHouseholds[snapshotHouseholds.length - 1] as any);
-      } else {
-          setFirstVisible(null);
-          setLastVisible(null);
-      }
-  };
 
-  // We can't call set in render, so we use an effect
-  useState(() => {
-    if(snapshotHouseholds) updateSnapshots();
-  });
-
+  const finalIsLoading = isLoading || isPaginating;
 
   return (
     <div className="flex min-h-screen w-full flex-col">
@@ -113,14 +136,14 @@ export default function AllHouseholdsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading && (
+                {finalIsLoading && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center">
                       Loading families...
                     </TableCell>
                   </TableRow>
                 )}
-                {!isLoading && households?.length === 0 && (
+                {!finalIsLoading && households?.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center">
                       No families registered yet.
@@ -153,12 +176,12 @@ export default function AllHouseholdsPage() {
             </Table>
           </CardContent>
           <CardFooter className="flex justify-between">
-            <Button onClick={handlePrevious} disabled={page <= 1 || isLoading}>
+            <Button onClick={handlePrevious} disabled={page <= 1 || finalIsLoading}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Previous
             </Button>
             <span className="text-sm text-muted-foreground">Page {page}</span>
-            <Button onClick={handleNext} disabled={!households || households.length < pageSize || isLoading}>
+            <Button onClick={handleNext} disabled={!hasNextPage || finalIsLoading}>
               Next
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
