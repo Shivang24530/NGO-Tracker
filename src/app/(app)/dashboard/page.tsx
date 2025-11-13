@@ -13,8 +13,10 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useFollowUpLogic } from '@/hooks/use-follow-up-logic';
 import { isPast, isSameDay } from 'date-fns';
+import { useFirestore } from '@/firebase';
+import { Loader2 } from 'lucide-react';
 
-export default function Dashboard() {
+function DashboardContent() {
   const { household, children, visits, isLoading } = useFollowUpLogic(new Date().getFullYear());
 
   const recentRegistrations = household ? [household] : [];
@@ -34,6 +36,80 @@ export default function Dashboard() {
       { title: 'Children Studying', value: childrenStudying, icon: TrendingUp, color: 'bg-green-500', progress: totalChildren > 0 ? (childrenStudying/totalChildren) * 100 : 0 },
       { title: 'Visits This Quarter', value: visitsThisQuarter, icon: Clock, color: 'bg-purple-500', progress: visitsThisQuarter > 0 ? (visitsThisQuarter/1)*100 : 0 },
   ];
+  
+  return (
+    <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+      <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
+        {stats.map((stat, index) => (
+          <Card key={index} className="shadow-sm hover:shadow-md transition-shadow">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+                <div className={`flex items-center justify-center h-8 w-8 rounded-lg bg-primary/20`}>
+                  <stat.icon className={`h-5 w-5 text-primary`} />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{isLoading ? '...' : stat.value}</div>
+              <Progress value={isLoading ? 0 : stat.progress} className="mt-2 h-2" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
+        <Card className="xl:col-span-2 shadow-sm">
+          <CardHeader>
+              <div className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="text-base font-semibold">Recent Registrations</CardTitle>
+              </div>
+          </CardHeader>
+          <CardContent className="grid gap-0">
+              {recentRegistrations?.map((h, index) => (
+                  <div key={h.id} className={`flex items-center gap-4 p-4 ${index < 4 ? 'border-b' : ''}`}>
+                      <div className="grid gap-1">
+                          <p className="text-sm font-medium leading-none">{h.familyName}</p>
+                          <p className="text-sm text-muted-foreground">@ {h.locationArea}</p>
+                      </div>
+                      <div className="ml-auto font-medium text-sm text-muted-foreground">{new Date(h.nextFollowupDue).toLocaleDateString()}</div>
+                  </div>
+              ))}
+              {isLoading && <p className="p-4 text-center text-muted-foreground">Loading...</p>}
+              {!isLoading && recentRegistrations?.length === 0 && <p className="p-4 text-center text-muted-foreground">No recent registrations found.</p>}
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm">
+          <CardHeader>
+              <div className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle className="text-base font-semibold">Children Overview</CardTitle>
+              </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-800">Currently Studying</p>
+                <p className="text-2xl font-bold text-green-900">{isLoading ? '...' : childrenStudying}</p>
+              </div>
+              <TrendingUp className="h-6 w-6 text-green-700" />
+            </div>
+            <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-between">
+               <div>
+                <p className="text-sm text-yellow-800">Not Studying</p>
+                <p className="text-2xl font-bold text-yellow-900">{isLoading ? '...' : childrenNotStudying}</p>
+              </div>
+              <AlertTriangle className="h-6 w-6 text-yellow-700" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </main>
+  );
+}
+
+export default function Dashboard() {
+  const firestore = useFirestore();
 
   return (
     <div className="flex min-h-screen w-full flex-col">
@@ -50,73 +126,13 @@ export default function Dashboard() {
             </Button>
           </div>
        </PageHeader>
-      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
-        <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
-          {stats.map((stat, index) => (
-            <Card key={index} className="shadow-sm hover:shadow-md transition-shadow">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-                  <div className={`flex items-center justify-center h-8 w-8 rounded-lg bg-primary/20`}>
-                    <stat.icon className={`h-5 w-5 text-primary`} />
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">{isLoading ? '...' : stat.value}</div>
-                <Progress value={isLoading ? 0 : stat.progress} className="mt-2 h-2" />
-              </CardContent>
-            </Card>
-          ))}
+      {firestore ? (
+        <DashboardContent />
+      ) : (
+        <div className="flex flex-1 items-center justify-center">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
         </div>
-        <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
-          <Card className="xl:col-span-2 shadow-sm">
-            <CardHeader>
-                <div className="flex items-center gap-2">
-                    <Users className="h-5 w-5 text-muted-foreground" />
-                    <CardTitle className="text-base font-semibold">Recent Registrations</CardTitle>
-                </div>
-            </CardHeader>
-            <CardContent className="grid gap-0">
-                {recentRegistrations?.map((h, index) => (
-                    <div key={h.id} className={`flex items-center gap-4 p-4 ${index < 4 ? 'border-b' : ''}`}>
-                        <div className="grid gap-1">
-                            <p className="text-sm font-medium leading-none">{h.familyName}</p>
-                            <p className="text-sm text-muted-foreground">@ {h.locationArea}</p>
-                        </div>
-                        <div className="ml-auto font-medium text-sm text-muted-foreground">{new Date(h.nextFollowupDue).toLocaleDateString()}</div>
-                    </div>
-                ))}
-                {isLoading && <p className="p-4 text-center text-muted-foreground">Loading...</p>}
-                {!isLoading && recentRegistrations?.length === 0 && <p className="p-4 text-center text-muted-foreground">No recent registrations found.</p>}
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm">
-            <CardHeader>
-                <div className="flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-muted-foreground" />
-                    <CardTitle className="text-base font-semibold">Children Overview</CardTitle>
-                </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-green-800">Currently Studying</p>
-                  <p className="text-2xl font-bold text-green-900">{isLoading ? '...' : childrenStudying}</p>
-                </div>
-                <TrendingUp className="h-6 w-6 text-green-700" />
-              </div>
-              <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-between">
-                 <div>
-                  <p className="text-sm text-yellow-800">Not Studying</p>
-                  <p className="text-2xl font-bold text-yellow-900">{isLoading ? '...' : childrenNotStudying}</p>
-                </div>
-                <AlertTriangle className="h-6 w-6 text-yellow-700" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      )}
     </div>
   );
 }
