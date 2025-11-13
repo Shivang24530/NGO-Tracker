@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   useFirestore,
   useUser,
@@ -35,13 +35,13 @@ export function useFollowUpLogic(year: number) {
 
   const householdsQuery = useMemoFirebase(
     () => (firestore ? query(collection(firestore, 'households')) : null),
-    [firestore]
+    [firestore, dataVersion]
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
   const childrenQuery = useMemoFirebase(
     () => (firestore ? collectionGroup(firestore, 'children') : null),
-    [firestore]
+    [firestore, dataVersion]
   );
   const { data: children, isLoading: childrenLoading } = useCollection<Child>(childrenQuery);
   
@@ -68,14 +68,13 @@ export function useFollowUpLogic(year: number) {
   const {
     data: visits,
     isLoading: visitsLoading,
-    error: visitsError,
   } = useCollection<FollowUpVisit>(visitsQuery);
 
   const [isInitializing, setIsInitializing] = useState(false);
 
   useEffect(() => {
     const initializeVisitsForHousehold = async (h: Household) => {
-      if (!user?.uid || !firestore) return;
+      if (!firestore) return false;
 
       try {
         const visitsColRef = collection(firestore, `households/${h.id}/followUpVisits`);
@@ -86,10 +85,8 @@ export function useFollowUpLogic(year: number) {
         );
 
         const existingVisitsSnapshot = await getDocs(yearQuery);
-        if (existingVisitsSnapshot.size >= 4) {
-          return;
-        }
-
+        if (existingVisitsSnapshot.size >= 4) return false;
+        
         const existingQuarters = new Set(
           existingVisitsSnapshot.docs.map(d => getQuarter(new Date((d.data() as FollowUpVisit).visitDate)))
         );
@@ -127,7 +124,7 @@ export function useFollowUpLogic(year: number) {
     };
 
     const runInitialization = async () => {
-      if (!households || visitsLoading || isInitializing) return;
+      if (!households || visitsLoading || isInitializing || householdsLoading) return;
       
       setIsInitializing(true);
       let didUpdate = false;
@@ -144,7 +141,7 @@ export function useFollowUpLogic(year: number) {
 
     runInitialization();
 
-  }, [households, year, firestore, user, visitsLoading, isInitializing]);
+  }, [households, year, firestore, visitsLoading, isInitializing, householdsLoading]);
 
   const quarters = useMemo(() => {
     if (!visits || !households) return [];
