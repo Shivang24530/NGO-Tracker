@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -37,6 +38,8 @@ const formSchema = z.object({
       childId: z.string(),
       isStudying: z.boolean(),
       studyingChallenges: z.string().optional(),
+      currentClass: z.string().optional(), // Added
+      schoolName: z.string().optional(), // Added
       notStudyingReason: z.string().optional(),
       isWorking: z.boolean().optional(),
       workDetails: z.string().optional(),
@@ -71,6 +74,8 @@ export function ConductVisitForm({ visit, household, children }: ConductVisitFor
         childId: child.id,
         isStudying: child.isStudying,
         studyingChallenges: '',
+        currentClass: child.currentClass || '', // Added
+        schoolName: child.schoolName || '', // Added
         notStudyingReason: '',
         isWorking: false,
         workDetails: '',
@@ -120,7 +125,16 @@ export function ConductVisitForm({ visit, household, children }: ConductVisitFor
 
             // Also update the child's main document
             const childRef = doc(firestore, `households/${household.id}/children/${update.childId}`);
-            batch.update(childRef, { isStudying: update.isStudying });
+            const childUpdateData: Partial<Child> = {
+                isStudying: update.isStudying,
+            };
+
+            if (update.isStudying) {
+                childUpdateData.currentClass = update.currentClass || 'N/A';
+                childUpdateData.schoolName = update.schoolName || 'N/A';
+            }
+            
+            batch.update(childRef, childUpdateData);
         });
         
         // 2. Update Household if it's an Annual visit
@@ -182,19 +196,49 @@ export function ConductVisitForm({ visit, household, children }: ConductVisitFor
                             )}
                         />
                         {childrenUpdates[index]?.isStudying ? (
-                             <FormField
-                                control={form.control}
-                                name={`childrenUpdates.${index}.studyingChallenges`}
-                                render={({ field }) => (
-                                    <FormItem className="mt-4">
-                                        <FormLabel>Any challenges with studies?</FormLabel>
-                                        <FormControl>
-                                            <Textarea placeholder="e.g., Needs help with maths, requests a tutor." {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+                             <div className="mt-4 space-y-4">
+                                <div className="grid md:grid-cols-2 gap-4">
+                                    <FormField
+                                        control={form.control}
+                                        name={`childrenUpdates.${index}.currentClass`}
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Current Class</FormLabel>
+                                                <FormControl>
+                                                    <Input placeholder="e.g., 5th Standard" {...field} />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name={`childrenUpdates.${index}.schoolName`}
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>School Name</FormLabel>
+                                                <FormControl>
+                                                    <Input placeholder="e.g., Local Public School" {...field} />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+                                <FormField
+                                    control={form.control}
+                                    name={`childrenUpdates.${index}.studyingChallenges`}
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Any challenges with studies?</FormLabel>
+                                            <FormControl>
+                                                <Textarea placeholder="e.g., Needs help with maths, requests a tutor." {...field} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
                         ) : (
                             <div className="mt-4 grid gap-4 md:grid-cols-2">
                                 <FormField
@@ -332,3 +376,5 @@ export function ConductVisitForm({ visit, household, children }: ConductVisitFor
     </Form>
   );
 }
+
+    
