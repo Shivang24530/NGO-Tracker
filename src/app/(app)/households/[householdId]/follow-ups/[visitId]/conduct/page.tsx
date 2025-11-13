@@ -1,6 +1,8 @@
+
 'use client';
 
 import { PageHeader } from '@/components/common/page-header';
+import { Button } from '@/components/ui/button';
 import { ConductVisitForm } from '@/components/conduct-visit-form';
 import { useDoc, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import type { FollowUpVisit, Household, Child } from '@/lib/types';
@@ -44,7 +46,32 @@ export default function ConductVisitPage() {
   }
   
   if (!visit || !household) {
-      notFound();
+    console.warn('ConductVisitPage: missing visit or household', {
+      params,
+      visit,
+      household,
+      visitLoading,
+      householdLoading,
+      childrenLoading,
+    });
+
+    // You may choose to show 404 or a user-friendly message.
+    // For debugging & safer UX we render a message and a link back.
+    return (
+      <div className="flex min-h-screen w-full flex-col items-center justify-center p-4">
+        <h2 className="text-xl font-semibold mb-2">Visit or Household Not Found</h2>
+        <p className="text-muted-foreground mb-4">
+          We could not locate the visit or household for the provided IDs.
+        </p>
+        <p className="text-sm text-muted-foreground mb-4">
+          householdId: <code>{householdId}</code><br />
+          visitId: <code>{visitId}</code>
+        </p>
+        <div className="flex gap-2">
+          <Button onClick={() => history.back()}>Go Back</Button>
+        </div>
+      </div>
+    );
   }
 
   return (

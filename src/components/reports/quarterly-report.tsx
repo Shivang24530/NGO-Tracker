@@ -1,5 +1,7 @@
+
 'use client';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Accordion,
   AccordionContent,
@@ -34,7 +36,6 @@ import {
   PenSquare,
   XCircle,
 } from 'lucide-react';
-import Link from 'next/link';
 import { toast } from '@/hooks/use-toast';
 import { getQuarter, format, isPast, getYear } from 'date-fns';
 import { useFollowUpLogic } from '@/hooks/use-follow-up-logic';
@@ -47,6 +48,7 @@ export function QuarterlyReport() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [isDownloading, setIsDownloading] = useState(false);
   const firestore = useFirestore();
+  const router = useRouter();
 
   const { quarters, household, children, isLoading } = useFollowUpLogic(year);
   
@@ -301,39 +303,39 @@ export function QuarterlyReport() {
                                 {visitStatus}
                               </Badge>
                             </TableCell>
-                                  {/* --- replace the existing TableCell action block with this --- */}
-                              <TableCell className="text-right">
-                                {visitStatus === 'Completed' ? (
-                                  <div className="flex items-center justify-end text-green-600">
-                                    <CheckCircle2 className="h-5 w-5 ml-auto" />
-                                  </div>
-                                ) : isSurveyActionable ? (
-                                  // Only render link if we have a visit id; otherwise show a disabled button
-                                  quarter.visit?.id ? (
-                                    <Link
-                                      href={`/households/${encodeURIComponent(
-                                        household.id
-                                      )}/follow-ups/${encodeURIComponent(quarter.visit.id)}/conduct`}
-                                      passHref
-                                    >
-                                      {/* Wrap Button with Link rather than using asChild */}
-                                      <Button variant="ghost" size="sm">
+                            <TableCell className="text-right">
+                              {visitStatus === 'Completed' ? (
+                                <div className="flex items-center justify-end text-green-600">
+                                  <CheckCircle2 className="h-5 w-5 ml-auto" />
+                                </div>
+                              ) : isSurveyActionable ? (
+                                quarter.visit?.id ? (
+                                  (() => {
+                                    const href = `/households/${encodeURIComponent(household.id)}/follow-ups/${encodeURIComponent(quarter.visit.id)}/conduct`;
+                                    return (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          console.log('Navigating to', href);
+                                          router.push(href);
+                                        }}
+                                      >
                                         <PenSquare className="mr-2 h-4 w-4" />
                                         Start Survey
                                       </Button>
-                                    </Link>
-                                  ) : (
-                                    <Button variant="ghost" size="sm" disabled>
-                                      <PenSquare className="mr-2 h-4 w-4" />
-                                      Start Survey
-                                    </Button>
-                                  )
+                                    );
+                                  })()
                                 ) : (
-                                  <span className="text-sm text-muted-foreground italic">
-                                    Survey period ended
-                                  </span>
-                                )}
-                              </TableCell>
+                                  <Button variant="ghost" size="sm" disabled>
+                                    <PenSquare className="mr-2 h-4 w-4" />
+                                    Start Survey
+                                  </Button>
+                                )
+                              ) : (
+                                <span className="text-sm text-muted-foreground italic">Survey period ended</span>
+                              )}
+                            </TableCell>
                           </TableRow>
                         ) : (
                            <TableRow>
