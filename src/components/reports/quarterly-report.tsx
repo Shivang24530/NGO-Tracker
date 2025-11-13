@@ -34,93 +34,16 @@ import {
   Calendar,
   PenSquare,
 } from 'lucide-react';
-import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import type { Household, FollowUpVisit, Child } from '@/lib/types';
-import { collection, query, where, doc } from 'firebase/firestore';
 import Link from 'next/link';
 import { toast } from '@/hooks/use-toast';
-import { getQuarter, startOfQuarter, endOfQuarter, isWithinInterval } from 'date-fns';
+import { getQuarter } from 'date-fns';
+import { useFollowUpLogic } from '@/hooks/use-follow-up-logic';
 
 export function QuarterlyReport() {
-  const [year, setYear] = useState(new Date().getFullYear().toString());
+  const [year, setYear] = useState(new Date().getFullYear());
   const [isDownloading, setIsDownloading] = useState(false);
-  
-  const firestore = useFirestore();
-  const { user, isUserLoading } = useUser();
 
-  const householdQuery = useMemoFirebase(
-    () =>
-      user?.uid
-        ? query(collection(firestore, 'households'), where('id', '==', user.uid))
-        : null,
-    [firestore, user]
-  );
-  const { data: households, isLoading: householdsLoading } =
-    useCollection<Household>(householdQuery);
-  
-  const childrenQuery = useMemoFirebase(
-    () =>
-      user?.uid
-        ? query(collection(firestore, `households/${user.uid}/children`))
-        : null,
-    [firestore, user]
-  );
-  const { data: children, isLoading: childrenLoading } = useCollection<Child>(childrenQuery);
-  
-  const visitsQuery = useMemoFirebase(
-    () =>
-      user?.uid
-        ? query(collection(firestore, `households/${user.uid}/followUpVisits`))
-        : null,
-    [firestore, user]
-  );
-  const { data: visits, isLoading: visitsLoading } = useCollection<FollowUpVisit>(visitsQuery);
-
-  const isLoading = isUserLoading || householdsLoading || childrenLoading || visitsLoading;
-
-  const totalFamilies = households?.length ?? 0;
-
-  const quarters = useMemo(() => {
-    const selectedYear = parseInt(year);
-    const now = new Date();
-    
-    return [1, 2, 3, 4].map(q => {
-      const quarterDate = new Date(selectedYear, (q - 1) * 3, 1);
-      const start = startOfQuarter(quarterDate);
-      const end = endOfQuarter(quarterDate);
-
-      const visitsInQuarter = visits?.filter(v => 
-        isWithinInterval(new Date(v.visitDate), { start, end })
-      ) ?? [];
-
-      const completedHouseholds = new Set(visitsInQuarter.filter(v => v.status === 'Completed').map(v => v.householdId));
-      const completedVisitsCount = completedHouseholds.size;
-      
-      const currentQuarter = getQuarter(now);
-      const isOngoing = selectedYear === now.getFullYear() && q === currentQuarter;
-      const isCompleted = totalFamilies > 0 && completedVisitsCount >= totalFamilies;
-
-      let status: 'Completed' | 'Ongoing' | 'Pending' = 'Pending';
-      if (isCompleted) {
-        status = 'Completed';
-      } else if (isOngoing) {
-        status = 'Ongoing';
-      }
-
-      return {
-        id: q,
-        name: `Quarter ${q} (${start.toLocaleString('default', { month: 'short' })} - ${end.toLocaleString('default', { month: 'short' })})`,
-        status,
-        completed: completedVisitsCount,
-        total: totalFamilies,
-        visits: visitsInQuarter,
-      };
-    });
-  }, [year, visits, totalFamilies]);
-
-  const getChildrenCount = (householdId: string) => {
-    return children?.filter(c => c.householdId === householdId).length ?? 0;
-  }
+  const { quarters, household, children, isLoading } = useFollowUpLogic(year);
 
   const handleDownload = (quarterId: number) => {
     setIsDownloading(true);
@@ -133,18 +56,9 @@ export function QuarterlyReport() {
       });
     }, 1500);
   };
-  
-  const getHouseholdReportData = (quarterVisits: FollowUpVisit[]) => {
-    if (!households) return [];
-    return households.map(h => {
-        const visitForHouseholdInQuarter = quarterVisits.find(v => v.householdId === h.id);
-        return {
-            ...h,
-            childrenCount: getChildrenCount(h.id),
-            visitStatus: visitForHouseholdInQuarter?.status || 'Pending',
-            visitId: visitForHouseholdInQuarter?.id,
-        }
-    })
+
+  const getChildrenCount = (householdId: string) => {
+    return children?.filter((c) => c.householdId === householdId).length ?? 0;
   };
 
   return (
@@ -155,7 +69,10 @@ export function QuarterlyReport() {
             <Calendar className="h-5 w-5 text-muted-foreground" />
             <h3 className="font-semibold">Select Year to View</h3>
           </div>
-          <Select value={year} onValueChange={setYear}>
+          <Select
+            value={year.toString()}
+            onValueChange={(val) => setYear(parseInt(val))}
+          >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Select Year" />
             </SelectTrigger>
@@ -167,108 +84,159 @@ export function QuarterlyReport() {
           </Select>
         </div>
       </Card>
-      
-      <Accordion type="single" collapsible defaultValue={`item-${getQuarter(new Date())}`}>
+
+      <Accordion
+        type="single"
+        collapsible
+        defaultValue={`item-${getQuarter(new Date())}`}
+      >
         {quarters.map((quarter) => {
-          const householdReportData = getHouseholdReportData(quarter.visits);
+          const householdData = household
+            ? {
+                ...household,
+                childrenCount: getChildrenCount(household.id),
+                visitStatus: quarter.visit?.status || 'Pending',
+                visitId: quarter.visit?.id,
+              }
+            : null;
+
           return (
-          <AccordionItem value={`item-${quarter.id}`} key={quarter.id} className="bg-card border rounded-lg mb-2">
-            <AccordionTrigger className="p-4 hover:no-underline">
-              <div className="flex items-center gap-4 w-full">
-                <div className="flex-1 text-left">
-                  <h4 className="font-semibold">{quarter.name}</h4>
-                  {quarter.status === 'Completed' ? (
-                    <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
-                      <CheckCircle2 className="mr-1 h-3 w-3" />
-                      Completed
-                    </Badge>
-                  ) : quarter.status === 'Ongoing' ? (
-                    <Badge variant="secondary" className="bg-orange-100 text-orange-800 border-orange-200">
-                      <Clock className="mr-1 h-3 w-3" />
-                      Ongoing
-                    </Badge>
-                  ) : (
-                     <Badge variant="secondary">
-                      Pending
-                    </Badge>
-                  )}
+            <AccordionItem
+              value={`item-${quarter.id}`}
+              key={quarter.id}
+              className="bg-card border rounded-lg mb-2"
+            >
+              <AccordionTrigger className="p-4 hover:no-underline">
+                <div className="flex items-center gap-4 w-full">
+                  <div className="flex-1 text-left">
+                    <h4 className="font-semibold">{quarter.name}</h4>
+                    {quarter.status === 'Completed' ? (
+                      <Badge
+                        variant="secondary"
+                        className="bg-green-100 text-green-800 border-green-200"
+                      >
+                        <CheckCircle2 className="mr-1 h-3 w-3" />
+                        Completed
+                      </Badge>
+                    ) : quarter.status === 'Ongoing' ? (
+                      <Badge
+                        variant="secondary"
+                        className="bg-orange-100 text-orange-800 border-orange-200"
+                      >
+                        <Clock className="mr-1 h-3 w-3" />
+                        Ongoing
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary">Pending</Badge>
+                    )}
+                  </div>
+                  <div className="w-1/4 hidden md:block">
+                    <p className="text-sm text-muted-foreground">Completion</p>
+                    <Progress
+                      value={
+                        isLoading || quarter.total === 0
+                          ? 0
+                          : (quarter.completed / quarter.total) * 100
+                      }
+                      className="mt-1 h-2"
+                    />
+                  </div>
+                  <div className="font-semibold text-muted-foreground">
+                    {isLoading ? '...' : `${quarter.completed}/${quarter.total}`}
+                  </div>
                 </div>
-                <div className="w-1/4 hidden md:block">
-                  <p className="text-sm text-muted-foreground">Completion</p>
-                  <Progress value={isLoading || quarter.total === 0 ? 0 : (quarter.completed / quarter.total) * 100} className="mt-1 h-2" />
-                </div>
-                <div className="font-semibold text-muted-foreground">
-                  {isLoading ? '...' : `${quarter.completed}/${quarter.total}`}
-                </div>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent className="p-4 pt-0">
+              </AccordionTrigger>
+              <AccordionContent className="p-4 pt-0">
                 <div className="border-t pt-4">
-                    <div className="flex justify-end mb-4">
-                        <Button
-                            onClick={() => handleDownload(quarter.id)}
-                            disabled={isDownloading}
-                            className="bg-green-600 text-white hover:bg-green-700"
-                        >
-                            {isDownloading ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                            <FileDown className="mr-2 h-4 w-4" />
-                            )}
-                            {isDownloading ? 'Generating...' : `Download Q${quarter.id} Report`}
-                        </Button>
-                    </div>
-                    <div className="border rounded-lg">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Family Name</TableHead>
-                                    <TableHead>Location</TableHead>
-                                    <TableHead>Children</TableHead>
-                                    <TableHead>Survey Status</TableHead>
-                                    <TableHead className="text-right">Action</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {isLoading ? (
-                                    <TableRow>
-                                        <TableCell colSpan={5} className="text-center py-8">
-                                            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    householdReportData.map(h => (
-                                        <TableRow key={h.id}>
-                                            <TableCell className="font-medium">{h.familyName}</TableCell>
-                                            <TableCell>{h.locationArea}</TableCell>
-                                            <TableCell>{h.childrenCount}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={h.visitStatus === "Completed" ? "default" : "secondary"} className={h.visitStatus === "Completed" ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>
-                                                    {h.visitStatus}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                {h.visitStatus === "Completed" ? (
-                                                    <CheckCircle2 className="h-5 w-5 text-green-600 ml-auto" />
-                                                ) : (
-                                                    <Button variant="ghost" size="sm" asChild disabled={!h.visitId}>
-                                                        <Link href={`/households/${h.id}/follow-ups/${h.visitId}/conduct`}>
-                                                            <PenSquare className="mr-2 h-4 w-4"/>
-                                                            Start Survey
-                                                        </Link>
-                                                    </Button>
-                                                )}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                  <div className="flex justify-end mb-4">
+                    <Button
+                      onClick={() => handleDownload(quarter.id)}
+                      disabled={isDownloading}
+                      className="bg-green-600 text-white hover:bg-green-700"
+                    >
+                      {isDownloading ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <FileDown className="mr-2 h-4 w-4" />
+                      )}
+                      {isDownloading
+                        ? 'Generating...'
+                        : `Download Q${quarter.id} Report`}
+                    </Button>
+                  </div>
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Family Name</TableHead>
+                          <TableHead>Location</TableHead>
+                          <TableHead>Children</TableHead>
+                          <TableHead>Survey Status</TableHead>
+                          <TableHead className="text-right">Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {isLoading ? (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center py-8">
+                              <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                            </TableCell>
+                          </TableRow>
+                        ) : householdData ? (
+                          <TableRow key={householdData.id}>
+                            <TableCell className="font-medium">
+                              {householdData.familyName}
+                            </TableCell>
+                            <TableCell>{householdData.locationArea}</TableCell>
+                            <TableCell>{householdData.childrenCount}</TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={
+                                  householdData.visitStatus === 'Completed'
+                                    ? 'default'
+                                    : 'secondary'
+                                }
+                                className={
+                                  householdData.visitStatus === 'Completed'
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-yellow-100 text-yellow-800'
+                                }
+                              >
+                                {householdData.visitStatus}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {householdData.visitStatus === 'Completed' ? (
+                                <CheckCircle2 className="h-5 w-5 text-green-600 ml-auto" />
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  asChild
+                                  disabled={!householdData.visitId}
+                                >
+                                  <Link
+                                    href={`/households/${householdData.id}/follow-ups/${householdData.visitId}/conduct`}
+                                  >
+                                    <PenSquare className="mr-2 h-4 w-4" />
+                                    Start Survey
+                                  </Link>
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                           <TableRow>
+                             <TableCell colSpan={5} className="text-center">No family registered for this account.</TableCell>
+                           </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
-            </AccordionContent>
-          </AccordionItem>
-          )
+              </AccordionContent>
+            </AccordionItem>
+          );
         })}
       </Accordion>
     </div>
