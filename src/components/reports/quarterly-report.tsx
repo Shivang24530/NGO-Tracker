@@ -100,6 +100,11 @@ export function QuarterlyReport() {
               }
             : null;
 
+          const completionPercentage =
+            isLoading || quarter.total === 0
+              ? 0
+              : (quarter.completed / quarter.total) * 100;
+
           return (
             <AccordionItem
               value={`item-${quarter.id}`}
@@ -133,11 +138,7 @@ export function QuarterlyReport() {
                   <div className="w-1/4 hidden md:block">
                     <p className="text-sm text-muted-foreground">Completion</p>
                     <Progress
-                      value={
-                        isLoading || quarter.total === 0
-                          ? 0
-                          : (quarter.completed / quarter.total) * 100
-                      }
+                      value={completionPercentage}
                       className="mt-1 h-2"
                     />
                   </div>
@@ -151,7 +152,7 @@ export function QuarterlyReport() {
                   <div className="flex justify-end mb-4">
                     <Button
                       onClick={() => handleDownload(quarter.id)}
-                      disabled={isDownloading}
+                      disabled={isDownloading || !household}
                       className="bg-green-600 text-white hover:bg-green-700"
                     >
                       {isDownloading ? (
@@ -227,7 +228,7 @@ export function QuarterlyReport() {
                           </TableRow>
                         ) : (
                            <TableRow>
-                             <TableCell colSpan={5} className="text-center">No family registered for this account.</TableCell>
+                             <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">No family registered for this account.</TableCell>
                            </TableRow>
                         )}
                       </TableBody>
