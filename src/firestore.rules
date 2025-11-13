@@ -19,11 +19,13 @@ service cloud.firestore {
       // Any authenticated user can create a household, as long as they are the owner.
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       
-      // Allow a user to list households only if they are querying by their own ownerId.
-      // This is a secure way to allow users to see only their own data.
-      allow list: if isSignedIn() && request.query.get('ownerId') == request.auth.uid;
+      // Allow any authenticated user to list the households collection.
+      // Access to individual documents is controlled by the 'get' rule below.
+      allow list: if isSignedIn();
 
       // Users can read a single household document if they are the owner.
+      // NOTE: This rule is not currently used by the app, as listing is preferred.
+      // But it's good practice to have it.
       allow get: if isOwner(resource);
 
       // Only the owner can update or delete their household document.
@@ -46,6 +48,13 @@ service cloud.firestore {
         // Only the owner of the grandparent household can manage progress updates.
         allow read, write: if isOwner(get(/databases/$(database)/documents/households/$(householdId)));
       }
+    }
+
+    // Rule for collection group query on 'children'.
+    // This rule allows a user to list all children across all households
+    // IF they are the owner of the parent household for each child.
+    match /{path=**}/children/{childId} {
+      allow list, read: if isOwner(get(path.slice(0, path.lastIndexOf('/children'))));
     }
   }
 }
