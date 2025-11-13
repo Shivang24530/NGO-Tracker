@@ -301,29 +301,39 @@ export function QuarterlyReport() {
                                 {visitStatus}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-right">
-                              {visitStatus === 'Completed' ? (
-                                <div className='flex items-center justify-end text-green-600'>
-                                <CheckCircle2 className="h-5 w-5 ml-auto" />
-                                </div>
-                              ) : isSurveyActionable ? (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  asChild
-                                  disabled={!quarter.visit?.id}
-                                >
-                                  <Link
-                                    href={`/households/${household.id}/follow-ups/${quarter.visit.id}/conduct`}
-                                  >
-                                    <PenSquare className="mr-2 h-4 w-4" />
-                                    Start Survey
-                                  </Link>
-                                </Button>
-                              ) : (
-                                 <span className="text-sm text-muted-foreground italic">Survey period ended</span>
-                              )}
-                            </TableCell>
+                                  {/* --- replace the existing TableCell action block with this --- */}
+                              <TableCell className="text-right">
+                                {visitStatus === 'Completed' ? (
+                                  <div className="flex items-center justify-end text-green-600">
+                                    <CheckCircle2 className="h-5 w-5 ml-auto" />
+                                  </div>
+                                ) : isSurveyActionable ? (
+                                  // Only render link if we have a visit id; otherwise show a disabled button
+                                  quarter.visit?.id ? (
+                                    <Link
+                                      href={`/households/${encodeURIComponent(
+                                        household.id
+                                      )}/follow-ups/${encodeURIComponent(quarter.visit.id)}/conduct`}
+                                      passHref
+                                    >
+                                      {/* Wrap Button with Link rather than using asChild */}
+                                      <Button variant="ghost" size="sm">
+                                        <PenSquare className="mr-2 h-4 w-4" />
+                                        Start Survey
+                                      </Button>
+                                    </Link>
+                                  ) : (
+                                    <Button variant="ghost" size="sm" disabled>
+                                      <PenSquare className="mr-2 h-4 w-4" />
+                                      Start Survey
+                                    </Button>
+                                  )
+                                ) : (
+                                  <span className="text-sm text-muted-foreground italic">
+                                    Survey period ended
+                                  </span>
+                                )}
+                              </TableCell>
                           </TableRow>
                         ) : (
                            <TableRow>
