@@ -190,22 +190,14 @@ export function QuarterlyReport() {
         defaultValue={`item-${getQuarter(new Date())}`}
       >
         {quarters.map((quarter) => {
-          const householdData = household
-            ? {
-                ...household,
-                childrenCount: getChildrenCount(household.id),
-                visitStatus: quarter.visit?.status || 'Pending',
-                visitId: quarter.visit?.id,
-              }
-            : null;
-
           const completionPercentage =
             isLoading || !household
               ? 0
               : (quarter.completed / quarter.total) * 100;
 
           const isPastQuarter = year < currentYear || (year === currentYear && quarter.id < currentQuarterNum);
-          const isSurveyActionable = householdData?.visitStatus !== 'Completed' && !isPastQuarter;
+          const isSurveyActionable = quarter.visit?.status !== 'Completed' && !isPastQuarter;
+          const visitStatus = quarter.visit?.status || 'Pending';
 
           return (
             <AccordionItem
@@ -291,31 +283,31 @@ export function QuarterlyReport() {
                               <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                             </TableCell>
                           </TableRow>
-                        ) : householdData ? (
-                          <TableRow key={householdData.id}>
+                        ) : household ? (
+                          <TableRow key={household.id}>
                             <TableCell className="font-medium">
-                              {householdData.familyName}
+                              {household.familyName}
                             </TableCell>
-                            <TableCell>{householdData.locationArea}</TableCell>
-                            <TableCell>{householdData.childrenCount}</TableCell>
+                            <TableCell>{household.locationArea}</TableCell>
+                            <TableCell>{children?.length ?? 0}</TableCell>
                             <TableCell>
                               <Badge
                                 variant={
-                                  householdData.visitStatus === 'Completed'
+                                  visitStatus === 'Completed'
                                     ? 'default'
                                     : 'secondary'
                                 }
                                 className={
-                                  householdData.visitStatus === 'Completed'
+                                  visitStatus === 'Completed'
                                     ? 'bg-green-100 text-green-800'
                                     : 'bg-yellow-100 text-yellow-800'
                                 }
                               >
-                                {householdData.visitStatus}
+                                {visitStatus}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right">
-                              {householdData.visitStatus === 'Completed' ? (
+                              {visitStatus === 'Completed' ? (
                                 <div className='flex items-center justify-end text-green-600'>
                                 <CheckCircle2 className="h-5 w-5 ml-auto" />
                                 </div>
@@ -324,10 +316,10 @@ export function QuarterlyReport() {
                                   variant="ghost"
                                   size="sm"
                                   asChild
-                                  disabled={!householdData.visitId}
+                                  disabled={!quarter.visit?.id}
                                 >
                                   <Link
-                                    href={`/households/${householdData.id}/follow-ups/${householdData.visitId}/conduct`}
+                                    href={`/households/${household.id}/follow-ups/${quarter.visit?.id}/conduct`}
                                   >
                                     <PenSquare className="mr-2 h-4 w-4" />
                                     Start Survey
