@@ -20,9 +20,9 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, Pen, Trash2, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { useDoc, useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
 import type { Household } from '@/lib/types';
-import { doc, deleteDoc, getDocs, collection, writeBatch } from 'firebase/firestore';
+import { doc, deleteDoc, getDocs, collection, writeBatch, query } from 'firebase/firestore';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,14 +48,13 @@ export default function AllHouseholdsPage() {
   const { user, isUserLoading } = useUser();
   const router = useRouter();
 
-  const householdRef = useMemoFirebase(
-    () => (user?.uid ? doc(firestore, 'households', user.uid) : null),
-    [firestore, user]
+  const householdsQuery = useMemoFirebase(
+    () => (firestore ? query(collection(firestore, 'households')) : null),
+    [firestore]
   );
   
-  const { data: household, isLoading } = useDoc<Household>(householdRef);
+  const { data: households, isLoading } = useCollection<Household>(householdsQuery);
 
-  const households = household ? [household] : [];
   const finalIsLoading = isUserLoading || isLoading;
 
   const handleDelete = async (householdId: string) => {
@@ -98,13 +97,13 @@ export default function AllHouseholdsPage() {
 
   return (
     <div className="flex min-h-screen w-full flex-col">
-      <PageHeader title="My Family" />
+      <PageHeader title="All Families" />
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
         <Card>
           <CardHeader>
-            <CardTitle>My Family Directory</CardTitle>
+            <CardTitle>Family Directory</CardTitle>
             <CardDescription>
-              This is the family registered under your account.
+              A list of all families registered in the system.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -126,14 +125,14 @@ export default function AllHouseholdsPage() {
                     </TableCell>
                   </TableRow>
                 )}
-                {!finalIsLoading && households.length === 0 && (
+                {!finalIsLoading && households && households.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center">
-                      No family registered for this account.
+                      No families registered yet.
                     </TableCell>
                   </TableRow>
                 )}
-                {households.map((household) => (
+                {households && households.map((household) => (
                   <TableRow key={household.id}>
                     <TableCell className="font-medium">{household.familyName}</TableCell>
                     <TableCell>{household.locationArea}</TableCell>

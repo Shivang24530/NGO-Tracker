@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -222,10 +221,12 @@ export function RegisterHouseholdForm() {
     try {
         const batch = writeBatch(firestore);
         
-        const householdRef = doc(firestore, 'households', user.uid);
+        // Generate a new unique ID for the household
+        const householdRef = doc(collection(firestore, 'households'));
 
         const newHouseholdData = {
-          id: user.uid,
+          id: householdRef.id,
+          ownerId: user.uid, // Add ownerId for security rules
           familyName: values.familyName,
           fullAddress: values.fullAddress,
           locationArea: values.locationArea,
@@ -248,7 +249,7 @@ export function RegisterHouseholdForm() {
             const childRef = doc(collection(householdRef, 'children'));
             batch.set(childRef, {
                 id: childRef.id,
-                householdId: user.uid,
+                householdId: householdRef.id,
                 name: child.name,
                 age: child.age,
                 gender: child.gender,
@@ -266,7 +267,7 @@ export function RegisterHouseholdForm() {
             const newVisitRef = doc(visitsColRef);
             const newVisitData: Omit<FollowUpVisit, 'childProgressUpdates'> = {
                 id: newVisitRef.id,
-                householdId: user.uid,
+                householdId: householdRef.id,
                 visitDate: formatISO(quarterDate),
                 visitType: qNum === 4 ? 'Annual' : 'Quarterly',
                 status: 'Pending',
@@ -408,7 +409,7 @@ export function RegisterHouseholdForm() {
                 <div className="border-dashed border-2 rounded-lg aspect-video flex items-center justify-center text-muted-foreground bg-secondary/30 overflow-hidden">
                   {familyPhotoUrl ? <Image src={familyPhotoUrl} alt="Family" width={600} height={400} className="w-full h-full object-cover" data-ai-hint="family portrait"/> : <span>No photo</span>}
                 </div>
-                <div className="flex">
+                <div className="flex justify-center gap-2">
                     <Button type="button" variant="outline" className="w-full" onClick={() => familyPhotoInputRef.current?.click()}>
                         <Upload className="mr-2 h-4 w-4" /> Upload Photo
                     </Button>
@@ -419,7 +420,7 @@ export function RegisterHouseholdForm() {
                 <div className="border-dashed border-2 rounded-lg aspect-video flex items-center justify-center text-muted-foreground bg-secondary/30 overflow-hidden">
                     {housePhotoUrl ? <Image src={housePhotoUrl} alt="House" width={600} height={400} className="w-full h-full object-cover" data-ai-hint="modest house" /> : <span>No photo</span>}
                 </div>
-                <div className="flex">
+                <div className="flex justify-center gap-2">
                     <Button type="button" variant="outline" className="w-full" onClick={() => housePhotoInputRef.current?.click()}>
                         <Upload className="mr-2 h-4 w-4" /> Upload Photo
                     </Button>

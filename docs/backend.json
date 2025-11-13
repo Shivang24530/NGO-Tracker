@@ -10,6 +10,10 @@
           "type": "string",
           "description": "Unique identifier for the Household entity."
         },
+        "ownerId": {
+          "type": "string",
+          "description": "The UID of the user who owns this household record."
+        },
         "familyName": {
           "type": "string",
           "description": "Name of the family."
@@ -76,6 +80,7 @@
       },
       "required": [
         "id",
+        "ownerId",
         "familyName",
         "fullAddress"
       ]

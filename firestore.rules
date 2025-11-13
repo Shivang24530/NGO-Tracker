@@ -9,34 +9,40 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isHouseholdOwner(householdId) {
-      return isSignedIn() && request.auth.uid == householdId;
+    // Checks if the user is the owner of the household document.
+    function isOwner(resource) {
+      return isSignedIn() && request.auth.uid == resource.data.ownerId;
     }
-    
-    // /households/{householdId}
-    // The user's UID is the document ID for their household.
-    match /households/{householdId} {
-      // A user can read, update, and delete their own household document.
-      allow read, update, delete: if isHouseholdOwner(householdId);
 
-      // A user can create their household document. The ID must match their UID.
-      allow create: if isHouseholdOwner(householdId) && request.resource.data.id == request.auth.uid;
+    // households/{householdId}
+    match /households/{householdId} {
+      // Any authenticated user can create a household.
+      // The new household document must have an `ownerId` field set to the user's UID.
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      
+      // Users can read any household document.
+      // For more restrictive access, you could change this to: `allow read: if isOwner(resource);`
+      allow read: if isSignedIn();
+
+      // Only the owner can update or delete their household document.
+      allow update, delete: if isOwner(resource);
       
       // Children subcollection
       match /children/{childId} {
-        // Only the household owner can manage their children's data.
-        allow read, write, update, delete: if isHouseholdOwner(householdId);
-
-        match /childProgressUpdates/{updateId} {
-            // Only the household owner can manage progress updates.
-            allow read, write, update, delete: if isHouseholdOwner(householdId);
-        }
+        // Only the owner of the parent household can manage their children's data.
+        allow read, write: if isOwner(get(/databases/$(database)/documents/households/$(householdId)));
       }
       
       // FollowUpVisits subcollection
       match /followUpVisits/{visitId} {
-        // Only the household owner can manage their follow-up visits.
-        allow read, write, update, delete: if isHouseholdOwner(householdId);
+        // Only the owner of the parent household can manage their follow-up visits.
+        allow read, write: if isOwner(get(/databases/$(database)/documents/households/$(householdId)));
+      }
+
+      // ChildProgressUpdates nested subcollection
+      match /children/{childId}/childProgressUpdates/{updateId} {
+        // Only the owner of the grandparent household can manage progress updates.
+        allow read, write: if isOwner(get(/databases/$(database)/documents/households/$(householdId)));
       }
     }
   }

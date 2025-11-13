@@ -7,7 +7,7 @@ import type { Household, FollowUpVisit } from '@/lib/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { MapPin, Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, collectionGroup } from 'firebase/firestore';
 import { useState, useMemo, useEffect } from 'react';
 
 type LatLng = {
@@ -22,24 +22,22 @@ export default function MapOverviewPage() {
     const [center, setCenter] = useState<LatLng | null>(null);
 
     const householdsQuery = useMemoFirebase(
-      () => (user?.uid ? query(collection(firestore, 'households'), where('id', '==', user.uid)) : null),
-      [firestore, user]
+      () => (firestore ? query(collection(firestore, 'households')) : null),
+      [firestore]
     );
     const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
     const visitsQuery = useMemoFirebase(
-        () => (user?.uid ? query(collection(firestore, 'households', user.uid, 'followUpVisits')) : null),
-        [firestore, user]
+        () => (firestore ? query(collectionGroup(firestore, 'followUpVisits')) : null),
+        [firestore]
     );
     const { data: followUpVisits, isLoading: visitsLoading } = useCollection<FollowUpVisit>(visitsQuery);
 
     useEffect(() => {
         let isMounted = true;
         
-        const fallbackToHouseholdLocation = () => {
-            if (isMounted && households && households.length > 0) {
-                setCenter({ lat: households[0].latitude, lng: households[0].longitude });
-            } else if (isMounted) {
+        const fallbackToDefaultLocation = () => {
+            if (isMounted) {
                 // A reasonable default if no other location is available
                 setCenter({ lat: 28.7041, lng: 77.1025 });
             }
@@ -54,18 +52,18 @@ export default function MapOverviewPage() {
                 },
                 () => {
                     // Geolocation failed or denied, use fallback
-                    fallbackToHouseholdLocation();
+                    fallbackToDefaultLocation();
                 }
             );
         } else {
             // Geolocation not supported, use fallback
-            fallbackToHouseholdLocation();
+            fallbackToDefaultLocation();
         }
 
         return () => {
             isMounted = false;
         };
-    }, [households]); // Depends on households for fallback
+    }, []);
 
     const householdsWithVisits = useMemo(() => {
         if (!households || !followUpVisits) return [];

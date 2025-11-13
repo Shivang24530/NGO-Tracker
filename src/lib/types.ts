@@ -1,5 +1,6 @@
 export type Household = {
   id: string;
+  ownerId: string; // ID of the user who registered the household
   familyName: string;
   fullAddress: string;
   locationArea: string;

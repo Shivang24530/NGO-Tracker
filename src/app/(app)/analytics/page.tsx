@@ -15,28 +15,43 @@ import {
   StudyStatusChart,
   LocationChart,
 } from '@/components/analytics/charts';
-import { useDoc, useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
+import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import { collection, query } from 'firebase/firestore';
 import type { Household, Child } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
+import { useMemo } from 'react';
 
 export default function AnalyticsPage() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
 
-  const householdRef = useMemoFirebase(
-    () => (user?.uid ? doc(firestore, 'households', user.uid) : null),
-    [firestore, user]
+  const householdsQuery = useMemoFirebase(
+    () => (firestore ? query(collection(firestore, 'households')) : null),
+    [firestore]
   );
-  const { data: household, isLoading: householdLoading } = useDoc<Household>(householdRef);
+  const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
-  const childrenRef = useMemoFirebase(
-    () => (user?.uid ? collection(firestore, 'households', user.uid, 'children') : null),
-    [firestore, user]
+  const allChildrenQuery = useMemoFirebase(
+    () => (firestore ? collection(firestore, 'households', 'dummy_id_for_group_query', 'children') : null),
+    [firestore]
   );
-  const { data: children, isLoading: childrenLoading } = useCollection<Child>(childrenRef);
 
-  const isLoading = isUserLoading || householdLoading || childrenLoading;
+  const childrenQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    // Note: This is a collection group query. 
+    // It requires a composite index on (`isStudying`, `age`, `gender`).
+    // For simplicity in this context, we will query all children from all households.
+    // This can be slow and expensive on large datasets.
+    return query(collection(firestore, 'households').withConverter({
+        toFirestore: (data: any) => data,
+        fromFirestore: (snap) => snap.data()
+    }).parent.collectionGroup('children'));
+  }, [firestore]);
+
+  const { data: children, isLoading: childrenLoading } = useCollection<Child>(childrenQuery);
+
+
+  const isLoading = isUserLoading || householdsLoading || childrenLoading;
   
   if (isLoading) {
     return (
@@ -48,8 +63,6 @@ export default function AnalyticsPage() {
       </div>
     );
   }
-
-  const households = household ? [household] : [];
 
   return (
     <div className="flex min-h-screen w-full flex-col">
@@ -89,7 +102,7 @@ export default function AnalyticsPage() {
               <CardTitle>Top 10 Family Locations</CardTitle>
             </CardHeader>
             <CardContent className="pl-2">
-              <LocationChart data={households} />
+              <LocationChart data={households || []} />
             </CardContent>
           </Card>
         </div>
