@@ -20,9 +20,12 @@ service cloud.firestore {
       // The new household document must have an `ownerId` field set to the user's UID.
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       
-      // Users can read any household document.
-      // For more restrictive access, you could change this to: `allow read: if isOwner(resource);`
-      allow read: if isSignedIn();
+      // Any authenticated user can list the households collection.
+      // Important for displaying all households on the main pages.
+      allow list: if isSignedIn();
+
+      // Users can read any single household document.
+      allow get: if isSignedIn();
 
       // Only the owner can update or delete their household document.
       allow update, delete: if isOwner(resource);

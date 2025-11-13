@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
@@ -145,7 +146,7 @@ export function useFollowUpLogic(year: number) {
 
     runInitialization();
 
-  }, [households, year, firestore, user, visitsLoading]); // Reruns if households data changes
+  }, [households, year, firestore, user, visitsLoading, isInitializing]); // Reruns if households data changes
 
   const quarters = useMemo(() => {
     if (!visits || !households) return [];
@@ -170,6 +171,10 @@ export function useFollowUpLogic(year: number) {
         status = 'Partially Completed';
       }
       
+      // Find the specific visit for the first household for navigation purposes.
+      // This is a simplification; a multi-household app might need a different approach.
+      const visit = households.length > 0 ? visitsForQuarter.find(v => v.householdId === households[0].id) : undefined;
+      
       return {
         id: qNum,
         name: `Quarter ${qNum} (${start.toLocaleString('default', {
@@ -178,13 +183,17 @@ export function useFollowUpLogic(year: number) {
         status,
         completed: completedCount,
         total: totalCount,
-        visits: visitsForQuarter, // All visits in this quarter
+        visits: visitsForQuarter, // All visits in this quarter for all households
+        visit: visit, // A representative visit for actions
       };
     });
   }, [year, visits, households]);
 
   const isLoading = isUserLoading || householdsLoading || visitsLoading || isInitializing;
 
+  // Simplified for now, just returning the first household for display purposes
+  const household = households ? households[0] : null;
+
   // Returning households and children for broader use in components
-  return { quarters, households, children, visits, isLoading };
+  return { quarters, household, households, children, visits, isLoading };
 }
