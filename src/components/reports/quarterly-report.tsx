@@ -1,4 +1,3 @@
-
 'use client';
 import { useState } from 'react';
 import {
@@ -150,10 +149,6 @@ export function QuarterlyReport() {
     } finally {
       setIsDownloading(false);
     }
-  };
-
-  const getChildrenCount = (householdId: string) => {
-    return children?.filter((c) => c.householdId === householdId).length ?? 0;
   };
 
   const now = new Date();
@@ -319,7 +314,7 @@ export function QuarterlyReport() {
                                   disabled={!quarter.visit?.id}
                                 >
                                   <Link
-                                    href={`/households/${household.id}/follow-ups/${quarter.visit?.id}/conduct`}
+                                    href={`/households/${household.id}/follow-ups/${quarter.visit.id}/conduct`}
                                   >
                                     <PenSquare className="mr-2 h-4 w-4" />
                                     Start Survey
