@@ -1,3 +1,4 @@
+
 'use client';
 
 import { PageHeader } from '@/components/common/page-header';
@@ -20,24 +21,24 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, doc, query } from 'firebase/firestore';
+import { collection, doc, query, collectionGroup } from 'firebase/firestore';
 import type { Child, Household } from '@/lib/types';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 
 export default function ProgressTrackingPage() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
   const [childrenWithStatus, setChildrenWithStatus] = useState<(Child & { status: 'Improved' | 'Declined' })[]>([]);
 
-  const householdRef = useMemoFirebase(
-    () => (user?.uid ? doc(firestore, 'households', user.uid) : null),
-    [firestore, user]
+  const householdsQuery = useMemoFirebase(
+    () => (firestore ? query(collection(firestore, 'households')) : null),
+    [firestore]
   );
-  const { data: household, isLoading: householdsLoading } = useDoc<Household>(householdRef);
-
+  const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
+  
   const childrenQuery = useMemoFirebase(
-    () => (user?.uid ? query(collection(firestore, `households/${user.uid}/children`)) : null),
-    [firestore, user]
+    () => (firestore ? collectionGroup(firestore, 'children') : null),
+    [firestore]
   );
   const { data: children, isLoading: childrenLoading } = useCollection<Child>(childrenQuery);
   
@@ -60,7 +61,7 @@ export default function ProgressTrackingPage() {
   const declinedCount = childrenWithStatus.filter(c => c.status === 'Declined').length;
   
   const findHouseholdName = (householdId: string) => {
-    return household?.familyName || '...';
+    return households?.find(h => h.id === householdId)?.familyName || '...';
   }
 
   return (
