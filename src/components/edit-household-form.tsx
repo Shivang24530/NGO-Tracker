@@ -144,20 +144,21 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
       const childRef = doc(firestore, 'households', household.id, 'children', childToDelete.id);
       const progressUpdatesQuery = query(collection(childRef, 'childProgressUpdates'));
 
-      // 1. Delete all progress updates in a batch
+      const batch = writeBatch(firestore);
+
+      // 1. Get all progress updates to delete
       const progressUpdatesSnapshot = await getDocs(progressUpdatesQuery);
-      if (!progressUpdatesSnapshot.empty) {
-        const deleteProgressBatch = writeBatch(firestore);
-        progressUpdatesSnapshot.forEach(doc => {
-          deleteProgressBatch.delete(doc.ref);
-        });
-        await deleteProgressBatch.commit();
-      }
+      progressUpdatesSnapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
 
-      // 2. After progress updates are gone, delete the child document itself
-      await deleteDoc(childRef);
+      // 2. Delete the child document itself
+      batch.delete(childRef);
 
-      // 3. Remove from UI after successful DB deletion
+      // 3. Commit all deletions atomically
+      await batch.commit();
+
+      // 4. Remove from UI after successful DB deletion
       remove(index);
       toast({
         title: 'Child Deleted',
@@ -169,7 +170,7 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
         toast({
             variant: "destructive",
             title: "Deletion Failed",
-            description: "An error occurred while deleting the child. Please try again.",
+            description: "An error occurred while deleting the child. Please check permissions and try again.",
         });
     }
   }

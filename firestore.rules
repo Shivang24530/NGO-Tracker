@@ -1,8 +1,43 @@
-/**
- * @file Firestore Security Rules for NGO Community Tracker
- * @description This ruleset enforces a strict, path-based ownership model combined with denormalized authorization to ensure secure access to household, child, follow-up visit, and progress update data.
- *
- * Data Structure:
- * - /households/{householdId}: Stores household information. May include a `members` map for collaborative access.
- * - /households/{householdId}/children/{childId}: Stores child data associated with a household.
- * - /households/{householdId}/followUpVisits/{followUpVisitId}: Stores follow-up visit data for a household
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isHouseholdOwner(householdId) {
+      return isSignedIn() && request.auth.uid == householdId;
+    }
+    
+    // /households/{householdId}
+    // The user's UID is the document ID for their household.
+    match /households/{householdId} {
+      // A user can read, update, and delete their own household document.
+      allow read, update, delete: if isHouseholdOwner(householdId);
+
+      // A user can create their household document. The ID must match their UID.
+      allow create: if isHouseholdOwner(householdId) && request.resource.data.id == request.auth.uid;
+      
+      // Children subcollection
+      match /children/{childId} {
+        // Only the household owner can manage their children's data.
+        allow read, write, update, delete: if isHouseholdOwner(householdId);
+
+        match /childProgressUpdates/{updateId} {
+            // Only the household owner can manage progress updates.
+            allow read, write, update, delete: if isHouseholdOwner(householdId);
+        }
+      }
+      
+      // FollowUpVisits subcollection
+      match /followUpVisits/{visitId} {
+        // Only the household owner can manage their follow-up visits.
+        allow read, write, update, delete: if isHouseholdOwner(householdId);
+      }
+    }
+  }
+}
