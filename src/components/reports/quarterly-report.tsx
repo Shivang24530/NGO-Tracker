@@ -1,6 +1,6 @@
 
 'use client';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import {
   Accordion,
   AccordionContent,
@@ -33,10 +33,11 @@ import {
   Loader2,
   Calendar,
   PenSquare,
+  XCircle,
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from '@/hooks/use-toast';
-import { getQuarter, format } from 'date-fns';
+import { getQuarter, format, isPast, getYear } from 'date-fns';
 import { useFollowUpLogic } from '@/hooks/use-follow-up-logic';
 import { getDocs, collection, query, where } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -49,7 +50,7 @@ export function QuarterlyReport() {
   const firestore = useFirestore();
 
   const { quarters, household, children, isLoading } = useFollowUpLogic(year);
-
+  
   const handleDownload = async (quarterId: number) => {
     if (!household || !children || !firestore) {
       toast({
@@ -64,23 +65,27 @@ export function QuarterlyReport() {
   
     try {
       const quarter = quarters.find((q) => q.id === quarterId);
-      if (!quarter || !quarter.visit || quarter.visit.status !== 'Completed') {
+       if (!quarter || quarter.completed === 0) {
         toast({
           variant: 'destructive',
           title: 'Report Not Ready',
-          description: 'The survey for this quarter must be completed to download the report.',
+          description: 'No surveys have been completed for this quarter.',
         });
         return;
       }
   
       const visit = quarter.visit;
+      if (!visit) {
+         toast({ variant: 'destructive', title: 'Visit not found' });
+         return;
+      }
   
       // Fetch all child progress updates for this specific visit
       const progressUpdatesByChild: { [childId: string]: ChildProgressUpdate } = {};
       
       for (const child of children) {
           const progressUpdatesRef = collection(firestore, `households/${household.id}/children/${child.id}/childProgressUpdates`);
-          const q = query(progressUpdatesRef, where('visit_id', '==', visit.id));
+          const q = query(progressUpdatesRef, where('visitId', '==', visit.id));
           const querySnapshot = await getDocs(q);
           if (!querySnapshot.empty) {
               // Assuming one progress update per child per visit
@@ -88,25 +93,15 @@ export function QuarterlyReport() {
           }
       }
       
-  
-      // Define CSV headers
       const headers = [
-        'Family Name',
-        'Location',
-        'Child Name',
-        'Age',
-        'Gender',
-        'Studying?',
-        'Reason Not Studying',
-        'Working?',
-        'Work Details',
-        'Study Challenges',
-        'Visit Date',
-        'Visited By',
+        'Family Name', 'Location', 'Child Name', 'Age', 'Gender',
+        'Studying?', 'Reason Not Studying', 'Working?', 'Work Details',
+        'Study Challenges', 'Visit Date', 'Visited By',
       ];
   
       const rows = children.map((child) => {
         const progress = progressUpdatesByChild[child.id];
+        if (!progress) return null; // Only include children with progress updates for this visit
         
         return [
           household.familyName,
@@ -121,12 +116,16 @@ export function QuarterlyReport() {
           progress ? progress.studying_challenges || '' : '',
           visit ? format(new Date(visit.visitDate), 'yyyy-MM-dd') : '',
           visit ? visit.visitedBy : '',
-        ].map(value => `"${String(value ?? '').replace(/"/g, '""')}"`); // Escape quotes
-      });
+        ].map(value => `"${String(value ?? '').replace(/"/g, '""')}"`);
+      }).filter(Boolean) as string[][];
   
+      if (rows.length === 0) {
+          toast({ title: 'No completed surveys to report for this quarter.'});
+          return;
+      }
+
       const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
       
-      // Create a blob and trigger download
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
@@ -156,6 +155,10 @@ export function QuarterlyReport() {
   const getChildrenCount = (householdId: string) => {
     return children?.filter((c) => c.householdId === householdId).length ?? 0;
   };
+
+  const now = new Date();
+  const currentQuarterNum = getQuarter(now);
+  const currentYear = getYear(now);
 
   return (
     <div className="space-y-6">
@@ -197,9 +200,12 @@ export function QuarterlyReport() {
             : null;
 
           const completionPercentage =
-            isLoading || quarter.total === 0
+            isLoading || !household
               ? 0
               : (quarter.completed / quarter.total) * 100;
+
+          const isPastQuarter = year < currentYear || (year === currentYear && quarter.id < currentQuarterNum);
+          const isSurveyActionable = householdData?.visitStatus !== 'Completed' && !isPastQuarter;
 
           return (
             <AccordionItem
@@ -219,16 +225,22 @@ export function QuarterlyReport() {
                         <CheckCircle2 className="mr-1 h-3 w-3" />
                         Completed
                       </Badge>
-                    ) : quarter.status === 'Ongoing' ? (
+                    ) : isPastQuarter ? (
+                       <Badge
+                        variant="secondary"
+                        className="bg-red-100 text-red-800 border-red-200"
+                      >
+                        <XCircle className="mr-1 h-3 w-3" />
+                        Incomplete
+                      </Badge>
+                    ) : (
                       <Badge
                         variant="secondary"
                         className="bg-orange-100 text-orange-800 border-orange-200"
                       >
                         <Clock className="mr-1 h-3 w-3" />
-                        Ongoing
+                        Pending
                       </Badge>
-                    ) : (
-                      <Badge variant="secondary">Pending</Badge>
                     )}
                   </div>
                   <div className="w-1/4 hidden md:block">
@@ -248,7 +260,7 @@ export function QuarterlyReport() {
                   <div className="flex justify-end mb-4">
                     <Button
                       onClick={() => handleDownload(quarter.id)}
-                      disabled={isDownloading || !household || quarter.status !== 'Completed'}
+                      disabled={isDownloading || !household || quarter.completed === 0}
                       className="bg-green-600 text-white hover:bg-green-700"
                     >
                       {isDownloading ? (
@@ -304,8 +316,10 @@ export function QuarterlyReport() {
                             </TableCell>
                             <TableCell className="text-right">
                               {householdData.visitStatus === 'Completed' ? (
-                                <CheckCircle2 className="h-5 w-5 text-green-600 ml-auto" />
-                              ) : (
+                                <div className='flex items-center justify-end text-green-600'>
+                                <CheckCircle2 className="h-5 w-5 ml-auto" />
+                                </div>
+                              ) : isSurveyActionable ? (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -319,6 +333,8 @@ export function QuarterlyReport() {
                                     Start Survey
                                   </Link>
                                 </Button>
+                              ) : (
+                                 <span className="text-sm text-muted-foreground italic">Survey period ended</span>
                               )}
                             </TableCell>
                           </TableRow>

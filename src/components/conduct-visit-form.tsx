@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
-import { useFirestore, useUser, setDocumentNonBlocking, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { useFirestore, useUser } from '@/firebase';
 import { collection, doc, writeBatch } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
@@ -78,10 +78,10 @@ export function ConductVisitForm({ visit, household, children }: ConductVisitFor
       annualSurvey:
         visit.visitType === 'Annual'
           ? {
-              toiletAvailable: household.toiletAvailable,
-              waterSupply: household.waterSupply,
-              electricity: household.electricity,
-              annualIncome: household.annualIncome,
+              toiletAvailable: household.toiletAvailable || false,
+              waterSupply: household.waterSupply || '',
+              electricity: household.electricity || false,
+              annualIncome: household.annualIncome || 0,
             }
           : undefined,
       notes: '',

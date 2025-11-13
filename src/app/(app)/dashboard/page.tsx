@@ -11,9 +11,6 @@ import { Users, UserPlus, TrendingUp, AlertTriangle, Clock } from 'lucide-react'
 import { PageHeader } from '@/components/common/page-header';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { useCollection, useFirestore, useUser, useMemoFirebase, useDoc } from '@/firebase';
-import type { Household, Child, FollowUpVisit } from '@/lib/types';
-import { collection, query, where, limit, doc } from 'firebase/firestore';
 import { useFollowUpLogic } from '@/hooks/use-follow-up-logic';
 import { isPast, isSameDay } from 'date-fns';
 

@@ -45,15 +45,24 @@ export function useFollowUpLogic(year: number) {
   const { data: children, isLoading: childrenLoading } =
     useCollection<Child>(childrenQuery);
 
+  const visitsQuery = useMemoFirebase(
+      () => user?.uid ? query(
+          collection(firestore, `households/${user.uid}/followUpVisits`),
+          where('visitDate', '>=', formatISO(startOfYear(new Date(year, 0, 1)))),
+          where('visitDate', '<=', formatISO(endOfYear(new Date(year, 11, 31))))
+      ) : null,
+      [firestore, user, year]
+  );
+  const { data: initialVisits, isLoading: visitsLoading, error: visitsError } = useCollection<FollowUpVisit>(visitsQuery);
+  
   const [visits, setVisits] = useState<FollowUpVisit[]>([]);
   const [logicIsLoading, setLogicIsLoading] = useState(true);
 
   useEffect(() => {
-    if (isUserLoading) {
-      return; // Wait until user state is resolved
+    if (isUserLoading || householdLoading) {
+      return; 
     }
     
-    // If user is loaded but there is no household, we can stop loading and proceed.
     if (!user || !household) {
       setLogicIsLoading(false);
       setVisits([]);
@@ -63,17 +72,18 @@ export function useFollowUpLogic(year: number) {
     const manageVisitsForYear = async () => {
       setLogicIsLoading(true);
       const visitsColRef = collection(firestore, `households/${user.uid}/followUpVisits`);
-      const yearStart = startOfYear(new Date(year, 0, 1));
-      const yearEnd = endOfYear(new Date(year, 11, 31));
-
-      const q = query(
-        visitsColRef,
-        where('visitDate', '>=', formatISO(yearStart)),
-        where('visitDate', '<=', formatISO(yearEnd))
-      );
-
+      
       try {
-        const existingVisitsSnapshot = await getDocs(q);
+        const yearStart = startOfYear(new Date(year, 0, 1));
+        const yearEnd = endOfYear(new Date(year, 11, 31));
+
+        const existingVisitsQuery = query(
+            visitsColRef,
+            where('visitDate', '>=', formatISO(yearStart)),
+            where('visitDate', '<=', formatISO(yearEnd))
+        );
+
+        const existingVisitsSnapshot = await getDocs(existingVisitsQuery);
         const existingVisits = existingVisitsSnapshot.docs.map(
           (d) => d.data() as FollowUpVisit
         );
@@ -98,6 +108,7 @@ export function useFollowUpLogic(year: number) {
               status: 'Pending',
               visitedBy: '',
               notes: '',
+              childProgressUpdates: [], // Initialize as empty
             };
             batch.set(newVisitRef, newVisitData);
             newVisits.push(newVisitData);
@@ -108,9 +119,9 @@ export function useFollowUpLogic(year: number) {
         if (batchHasWrites) {
           await batch.commit();
           // After committing, re-fetch all visits for the year to have a consistent state
-          const allVisitsSnapshot = await getDocs(q);
-          const allVisits = allVisitsSnapshot.docs.map(d => d.data() as FollowUpVisit);
-          setVisits(allVisits);
+           const allVisitsSnapshot = await getDocs(existingVisitsQuery);
+           const allVisits = allVisitsSnapshot.docs.map(d => d.data() as FollowUpVisit);
+           setVisits(allVisits);
         } else {
           setVisits(existingVisits);
         }
@@ -121,15 +132,54 @@ export function useFollowUpLogic(year: number) {
         setLogicIsLoading(false);
       }
     };
+    
+    // This effect now combines creation logic with listening to live updates.
+    // When initialVisits from useCollection changes, we re-evaluate.
+    if(initialVisits) {
+        const allCurrentYearVisits = [...initialVisits];
+        const missingQuarters: number[] = [];
+        for (let qNum = 1; qNum <= 4; qNum++) {
+            const visitExists = initialVisits.some(v => getQuarter(new Date(v.visitDate)) === qNum && getYear(new Date(v.visitDate)) === year);
+            if (!visitExists) {
+                missingQuarters.push(qNum);
+            }
+        }
 
-    if (household) { // Only run if household exists
-      manageVisitsForYear();
+        if(missingQuarters.length > 0) {
+            const createMissingVisits = async () => {
+                const batch = writeBatch(firestore);
+                const visitsColRef = collection(firestore, `households/${user.uid}/followUpVisits`);
+                
+                missingQuarters.forEach(qNum => {
+                    const quarterDate = new Date(year, (qNum - 1) * 3, 15);
+                    const newVisitRef = doc(visitsColRef);
+                    const newVisitData: FollowUpVisit = {
+                        id: newVisitRef.id, householdId: user.uid,
+                        visitDate: formatISO(quarterDate), visitType: 'Quarterly',
+                        status: 'Pending', visitedBy: '', notes: '', childProgressUpdates: []
+                    };
+                    batch.set(newVisitRef, newVisitData);
+                    allCurrentYearVisits.push(newVisitData);
+                });
+                await batch.commit();
+                // No need to set state here, the onSnapshot from useCollection will trigger a re-render with the new data.
+            };
+            createMissingVisits();
+        }
+        setVisits(allCurrentYearVisits.sort((a, b) => new Date(a.visitDate).getTime() - new Date(b.visitDate).getTime()));
+        setLogicIsLoading(false);
+    } else if (!visitsLoading) {
+        // If initialVisits is null and we are not loading, it means there are no visits yet.
+        // So we should create them.
+        manageVisitsForYear();
     }
 
-  }, [year, user, household, isUserLoading, firestore]);
+
+  }, [year, user, household, isUserLoading, householdLoading, firestore, initialVisits, visitsLoading]);
+
 
   const quarters = useMemo(() => {
-    if (!household) return []; // Return empty if no household
+    if (!household) return []; 
     
     const now = new Date();
     
@@ -143,17 +193,13 @@ export function useFollowUpLogic(year: number) {
       );
 
       const isCompleted = visitForQuarter?.status === 'Completed';
-      const currentQuarter = getQuarter(now);
-      const isOngoing = year === now.getFullYear() && qNum === currentQuarter && !isCompleted;
       
-      let status: 'Completed' | 'Ongoing' | 'Pending' = 'Pending';
+      let status: 'Completed' | 'Pending' = 'Pending';
       if (isCompleted) {
         status = 'Completed';
-      } else if (isOngoing) {
-        status = 'Ongoing';
       }
       
-      const total = 1; // Always 1 family for this user
+      const total = 1;
       const completedCount = isCompleted ? 1 : 0;
 
       return {
@@ -169,7 +215,7 @@ export function useFollowUpLogic(year: number) {
     });
   }, [year, visits, household]);
 
-  const isLoading = isUserLoading || householdLoading || logicIsLoading;
+  const isLoading = isUserLoading || householdLoading || visitsLoading || logicIsLoading;
 
   return { quarters, household, children, visits, isLoading };
 }

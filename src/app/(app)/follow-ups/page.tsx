@@ -2,11 +2,9 @@
 'use client';
 import Link from 'next/link';
 import { PageHeader } from '@/components/common/page-header';
-import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -14,9 +12,7 @@ import {
   isThisMonth,
   isPast,
   isSameDay,
-  endOfDay,
 } from 'date-fns';
-import { Badge } from '@/components/ui/badge';
 import {
   Clock,
   CalendarCheck,
@@ -24,7 +20,6 @@ import {
   Users,
   TrendingUp,
 } from 'lucide-react';
-import type { FollowUpVisit } from '@/lib/types';
 import { useFollowUpLogic } from '@/hooks/use-follow-up-logic';
 
 const StatCard = ({ title, value, icon: Icon, color, isLoading }: { title: string; value: number | string, icon: React.ElementType, color: string, isLoading: boolean }) => (
@@ -56,7 +51,7 @@ export default function FollowUpsPage() {
 
   const upcoming =
     visits?.filter(
-      (v) => v.status === 'Pending' && isThisMonth(new Date(v.visitDate))
+      (v) => v.status === 'Pending' && !isPast(new Date(v.visitDate))
     ) ?? [];
   
   const completed =
@@ -78,7 +73,7 @@ export default function FollowUpsPage() {
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <StatCard title="Overdue Visits" value={overdue.length} icon={AlertCircle} color="red" isLoading={isLoading} />
-            <StatCard title="Due This Month" value={upcoming.length} icon={Clock} color="orange" isLoading={isLoading} />
+            <StatCard title="Upcoming Visits" value={upcoming.length} icon={Clock} color="orange" isLoading={isLoading} />
             <StatCard title="Visits Completed" value={completed.length} icon={CalendarCheck} color="green" isLoading={isLoading} />
             <StatCard title="Total Families" value={totalFamilies} icon={Users} color="blue" isLoading={isLoading} />
         </div>
@@ -114,7 +109,7 @@ export default function FollowUpsPage() {
             </Card>
              <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Clock className="h-5 w-5 text-orange-500" /> Upcoming This Month ({upcoming.length})</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><Clock className="h-5 w-5 text-orange-500" /> Upcoming Visits ({upcoming.length})</CardTitle>
                 </CardHeader>
                 <CardContent>
                 {isLoading ? <p className="text-center py-8 text-muted-foreground">Loading...</p> : upcoming.length > 0 ? (
@@ -134,7 +129,7 @@ export default function FollowUpsPage() {
                 ) : (
                     <div className="text-center py-8 text-muted-foreground space-y-2">
                         <CalendarCheck className="mx-auto h-12 w-12" />
-                        <h3 className="font-semibold">No visits scheduled for this month</h3>
+                        <h3 className="font-semibold">No visits scheduled</h3>
                     </div>
                 )}
                 </CardContent>
@@ -154,7 +149,6 @@ export default function FollowUpsPage() {
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-4">
                                             <p className="font-semibold">{householdName || 'Unknown Family'}</p>
-                                            <Badge variant="secondary">{visit.visitType}</Badge>
                                             <p className="text-sm text-muted-foreground">by {visit.visitedBy}</p>
                                         </div>
                                         <p className="text-sm text-muted-foreground">{new Date(visit.visitDate).toLocaleDateString()}</p>
