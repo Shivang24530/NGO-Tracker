@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray } from 'react-hook-form';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
-import { doc, writeBatch, collection } from 'firebase/firestore';
+import { doc, writeBatch, collection, getDocs, query } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 
 import { Button } from '@/components/ui/button';
@@ -80,6 +80,7 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
   const firestore = useFirestore();
   const [isLocating, setIsLocating] = useState(false);
   const [childrenToDelete, setChildrenToDelete] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -140,10 +141,11 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
   }
 
   async function onSubmit(values: FormData) {
+    setIsSubmitting(true);
     try {
         const batch = writeBatch(firestore);
         const householdRef = doc(firestore, 'households', household.id);
-        const childrenRef = collection(householdRef, 'children');
+        const childrenCollectionRef = collection(householdRef, 'children');
 
         // 1. Update household doc
         batch.update(householdRef, {
@@ -160,11 +162,11 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
         values.children.forEach(child => {
             if (child.id) {
                 // Update existing child
-                const childRef = doc(childrenRef, child.id);
+                const childRef = doc(childrenCollectionRef, child.id);
                 batch.update(childRef, { name: child.name, age: child.age, gender: child.gender });
             } else {
                 // Add new child
-                const newChildRef = doc(childrenRef);
+                const newChildRef = doc(childrenCollectionRef);
                 batch.set(newChildRef, { 
                     id: newChildRef.id,
                     householdId: household.id,
@@ -179,10 +181,19 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
         });
         
         // 3. Handle children deletions
-        childrenToDelete.forEach(childId => {
-            const childRef = doc(childrenRef, childId);
+        for (const childId of childrenToDelete) {
+            const childRef = doc(childrenCollectionRef, childId);
+
+            // Important: Delete subcollections first (e.g., childProgressUpdates)
+            const progressUpdatesQuery = query(collection(childRef, 'childProgressUpdates'));
+            const progressUpdatesSnapshot = await getDocs(progressUpdatesQuery);
+            progressUpdatesSnapshot.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+
+            // Then delete the child document itself
             batch.delete(childRef);
-        });
+        }
 
         await batch.commit();
 
@@ -200,6 +211,8 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
             title: "Update Failed",
             description: "An error occurred while saving the data. Please try again.",
         });
+    } finally {
+        setIsSubmitting(false);
     }
   }
 
@@ -265,7 +278,7 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
                         <AlertDialogHeader>
                             <AlertDialogTitle>Delete child?</AlertDialogTitle>
                             <AlertDialogDescription>
-                                Are you sure you want to remove <span className="font-semibold">{form.getValues(`children.${index}.name`)}</span>? This action is permanent.
+                                Are you sure you want to remove <span className="font-semibold">{form.getValues(`children.${index}.name`)}</span>? This action is permanent and will delete all their progress records.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -294,8 +307,9 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
           <Button type="button" variant="outline" onClick={() => router.back()}>
             Cancel
           </Button>
-          <Button type="submit" size="lg" className="font-headline bg-green-600 hover:bg-green-700">
-            Save Changes
+          <Button type="submit" size="lg" className="font-headline bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isSubmitting ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>
       </form>
