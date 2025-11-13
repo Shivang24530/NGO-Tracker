@@ -114,7 +114,11 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
     },
   });
 
-  const { fields, append, remove, control, setValue, watch } = form;
+  const { control, setValue, watch } = form;
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "children",
+  });
   const latitude = watch('latitude');
   const longitude = watch('longitude');
 
