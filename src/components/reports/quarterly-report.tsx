@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Accordion,
   AccordionContent,
@@ -38,16 +38,10 @@ import type { Household, FollowUpVisit, Child } from '@/lib/types';
 import { collection, query, where } from 'firebase/firestore';
 import Link from 'next/link';
 import { toast } from '@/hooks/use-toast';
-
-const quarters = [
-  { id: 1, name: 'Quarter 1 (Jan - Mar)', status: 'Completed', completed: 23, total: 23 },
-  { id: 2, name: 'Quarter 2 (Apr - Jun)', status: 'Completed', completed: 23, total: 23 },
-  { id: 3, name: 'Quarter 3 (Jul - Sep)', status: 'Completed', completed: 23, total: 23 },
-  { id: 4, name: 'Quarter 4 (Oct - Dec)', status: 'Ongoing', completed: 5, total: 23 },
-];
+import { getQuarter, startOfQuarter, endOfQuarter, isWithinInterval } from 'date-fns';
 
 export function QuarterlyReport() {
-  const [year, setYear] = useState('2025');
+  const [year, setYear] = useState(new Date().getFullYear().toString());
   const [isDownloading, setIsDownloading] = useState(false);
   
   const firestore = useFirestore();
@@ -66,7 +60,7 @@ export function QuarterlyReport() {
   const childrenQuery = useMemoFirebase(
     () =>
       user?.uid
-        ? query(collection(firestore, 'households', user.uid, 'children'))
+        ? query(collection(firestore, `households/${user.uid}/children`))
         : null,
     [firestore, user]
   );
@@ -75,13 +69,51 @@ export function QuarterlyReport() {
   const visitsQuery = useMemoFirebase(
     () =>
       user?.uid
-        ? query(collection(firestore, 'households', user.uid, 'followUpVisits'))
+        ? query(collection(firestore, `households/${user.uid}/followUpVisits`))
         : null,
     [firestore, user]
   );
   const { data: visits, isLoading: visitsLoading } = useCollection<FollowUpVisit>(visitsQuery);
 
   const isLoading = isUserLoading || householdsLoading || childrenLoading || visitsLoading;
+
+  const totalFamilies = households?.length ?? 0;
+
+  const quarters = useMemo(() => {
+    const selectedYear = parseInt(year);
+    const now = new Date();
+    
+    return [1, 2, 3, 4].map(q => {
+      const quarterDate = new Date(selectedYear, (q - 1) * 3, 1);
+      const start = startOfQuarter(quarterDate);
+      const end = endOfQuarter(quarterDate);
+
+      const completedVisits = visits?.filter(v => 
+        v.status === 'Completed' && 
+        isWithinInterval(new Date(v.visitDate), { start, end })
+      ).length ?? 0;
+      
+      const currentQuarter = getQuarter(now);
+      const isOngoing = selectedYear === now.getFullYear() && q === currentQuarter;
+      const isCompleted = completedVisits >= totalFamilies;
+
+      let status: 'Completed' | 'Ongoing' | 'Pending' = 'Pending';
+      if (isCompleted) {
+        status = 'Completed';
+      } else if (isOngoing) {
+        status = 'Ongoing';
+      }
+
+      return {
+        id: q,
+        name: `Quarter ${q} (${start.toLocaleString('default', { month: 'short' })} - ${end.toLocaleString('default', { month: 'short' })})`,
+        status,
+        completed: completedVisits,
+        total: totalFamilies,
+      };
+    });
+  }, [year, visits, totalFamilies]);
+
 
   const getChildrenCount = (householdId: string) => {
     return children?.filter(c => c.householdId === householdId).length ?? 0;
@@ -145,19 +177,23 @@ export function QuarterlyReport() {
                       <CheckCircle2 className="mr-1 h-3 w-3" />
                       Completed
                     </Badge>
-                  ) : (
+                  ) : quarter.status === 'Ongoing' ? (
                     <Badge variant="secondary" className="bg-orange-100 text-orange-800 border-orange-200">
                       <Clock className="mr-1 h-3 w-3" />
                       Ongoing
+                    </Badge>
+                  ) : (
+                     <Badge variant="secondary">
+                      Pending
                     </Badge>
                   )}
                 </div>
                 <div className="w-1/4 hidden md:block">
                   <p className="text-sm text-muted-foreground">Completion</p>
-                  <Progress value={(quarter.completed / quarter.total) * 100} className="mt-1 h-2" />
+                  <Progress value={isLoading || quarter.total === 0 ? 0 : (quarter.completed / quarter.total) * 100} className="mt-1 h-2" />
                 </div>
                 <div className="font-semibold text-muted-foreground">
-                  {quarter.completed}/{quarter.total}
+                  {isLoading ? '...' : `${quarter.completed}/${quarter.total}`}
                 </div>
               </div>
             </AccordionTrigger>
