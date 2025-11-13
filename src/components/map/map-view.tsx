@@ -21,6 +21,14 @@ interface MapViewProps {
   center: LatLng | null;
 }
 
+const UserLocationIcon = () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="10" fill="#4285F4" stroke="#FFFFFF" strokeWidth="2" />
+        <circle cx="12" cy="12" r="5" fill="#FFFFFF" />
+    </svg>
+);
+
+
 export function MapView({ households, apiKey, center }: MapViewProps) {
   const [selectedHousehold, setSelectedHousehold] = useState<HouseholdWithVisit | null>(null);
 
@@ -69,6 +77,12 @@ export function MapView({ households, apiKey, center }: MapViewProps) {
                         />
                     </AdvancedMarker>
                 ))}
+
+                {center && (
+                    <AdvancedMarker position={center} title="Your Location">
+                        <UserLocationIcon />
+                    </AdvancedMarker>
+                )}
 
                 {selectedHousehold && (
                     <InfoWindow
