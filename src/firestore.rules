@@ -16,16 +16,15 @@ service cloud.firestore {
 
     // households/{householdId}
     match /households/{householdId} {
-      // Any authenticated user can create a household.
-      // The new household document must have an `ownerId` field set to the user's UID.
+      // Any authenticated user can create a household, as long as they are the owner.
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       
-      // Any authenticated user can list the households collection.
-      // Important for displaying all households on the main pages.
-      allow list: if isSignedIn();
+      // Allow a user to list households only if they are querying by their own ownerId.
+      // This is a secure way to allow users to see only their own data.
+      allow list: if isSignedIn() && request.query.get('ownerId') == request.auth.uid;
 
-      // Users can read any single household document.
-      allow get: if isSignedIn();
+      // Users can read a single household document if they are the owner.
+      allow get: if isOwner(resource);
 
       // Only the owner can update or delete their household document.
       allow update, delete: if isOwner(resource);

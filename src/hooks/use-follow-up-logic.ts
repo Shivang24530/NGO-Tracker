@@ -34,8 +34,8 @@ export function useFollowUpLogic(year: number) {
   const { user, isUserLoading } = useUser();
 
   const householdsQuery = useMemoFirebase(
-    () => (firestore ? query(collection(firestore, 'households')) : null),
-    [firestore]
+    () => (firestore && user ? query(collection(firestore, 'households'), where('ownerId', '==', user.uid)) : null),
+    [firestore, user]
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
@@ -46,15 +46,12 @@ export function useFollowUpLogic(year: number) {
 
   // Effect for fetching nested children and visits data
   useEffect(() => {
-    // Wait until firestore is available and the initial households load is complete.
     if (!firestore || households === null) {
-      // If households is explicitly null, it means we are in the initial loading state.
       setChildrenLoading(true);
       setVisitsLoading(true);
       return;
     }
 
-    // If households has loaded but is an empty array, there's nothing to fetch.
     if (households.length === 0) {
       setAllChildren([]);
       setAllVisits([]);
