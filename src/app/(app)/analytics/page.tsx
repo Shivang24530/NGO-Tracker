@@ -14,10 +14,6 @@ import {
   GenderChart,
   StudyStatusChart,
   LocationChart,
-  ToiletAvailabilityChart,
-  WaterSupplyChart,
-  ElectricityChart,
-  AnnualIncomeChart,
 } from '@/components/analytics/charts';
 import { useDoc, useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
@@ -94,38 +90,6 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent className="pl-2">
               <LocationChart data={households} />
-            </CardContent>
-          </Card>
-           <Card>
-            <CardHeader>
-              <CardTitle>Toilet Availability</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ToiletAvailabilityChart data={households} />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Water Supply Source</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <WaterSupplyChart data={households} />
-            </CardContent>
-          </Card>
-           <Card>
-            <CardHeader>
-              <CardTitle>Electricity Access</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ElectricityChart data={households} />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Annual Income Distribution</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AnnualIncomeChart data={households} />
             </CardContent>
           </Card>
         </div>
