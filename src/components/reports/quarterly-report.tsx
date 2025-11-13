@@ -80,7 +80,7 @@ export function QuarterlyReport() {
       
       for (const child of children) {
           const progressUpdatesRef = collection(firestore, `households/${household.id}/children/${child.id}/childProgressUpdates`);
-          const q = query(progressUpdatesRef, where('visitId', '==', visit.id));
+          const q = query(progressUpdatesRef, where('visit_id', '==', visit.id));
           const querySnapshot = await getDocs(q);
           if (!querySnapshot.empty) {
               // Assuming one progress update per child per visit

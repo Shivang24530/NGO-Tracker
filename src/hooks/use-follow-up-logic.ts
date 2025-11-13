@@ -52,6 +52,7 @@ export function useFollowUpLogic(year: number) {
     if (isUserLoading) {
       return; // Wait until user state is resolved
     }
+    
     // If user is loaded but there is no household, we can stop loading and proceed.
     if (!user || !household) {
       setLogicIsLoading(false);
@@ -97,7 +98,6 @@ export function useFollowUpLogic(year: number) {
               status: 'Pending',
               visitedBy: '',
               notes: '',
-              childProgressUpdates: [],
             };
             batch.set(newVisitRef, newVisitData);
             newVisits.push(newVisitData);
@@ -107,9 +107,14 @@ export function useFollowUpLogic(year: number) {
 
         if (batchHasWrites) {
           await batch.commit();
+          // After committing, re-fetch all visits for the year to have a consistent state
+          const allVisitsSnapshot = await getDocs(q);
+          const allVisits = allVisitsSnapshot.docs.map(d => d.data() as FollowUpVisit);
+          setVisits(allVisits);
+        } else {
+          setVisits(existingVisits);
         }
 
-        setVisits([...existingVisits, ...newVisits]);
       } catch (error) {
         console.error("Error managing visits for year:", error);
       } finally {
@@ -117,10 +122,15 @@ export function useFollowUpLogic(year: number) {
       }
     };
 
-    manageVisitsForYear();
+    if (household) { // Only run if household exists
+      manageVisitsForYear();
+    }
+
   }, [year, user, household, isUserLoading, firestore]);
 
   const quarters = useMemo(() => {
+    if (!household) return []; // Return empty if no household
+    
     const now = new Date();
     
     return [1, 2, 3, 4].map((qNum) => {
@@ -143,8 +153,8 @@ export function useFollowUpLogic(year: number) {
         status = 'Ongoing';
       }
       
-      const total = household ? 1 : 0;
-      const completedCount = household && isCompleted ? 1 : 0;
+      const total = 1; // Always 1 family for this user
+      const completedCount = isCompleted ? 1 : 0;
 
       return {
         id: qNum,
@@ -161,5 +171,5 @@ export function useFollowUpLogic(year: number) {
 
   const isLoading = isUserLoading || householdLoading || logicIsLoading;
 
-  return { quarters, household, children, isLoading };
+  return { quarters, household, children, visits, isLoading };
 }

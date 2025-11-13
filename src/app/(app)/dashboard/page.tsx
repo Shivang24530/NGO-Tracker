@@ -11,55 +11,32 @@ import { Users, UserPlus, TrendingUp, AlertTriangle, Clock } from 'lucide-react'
 import { PageHeader } from '@/components/common/page-header';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useUser, useMemoFirebase, useDoc } from '@/firebase';
 import type { Household, Child, FollowUpVisit } from '@/lib/types';
-import { collection, query, where, limit } from 'firebase/firestore';
+import { collection, query, where, limit, doc } from 'firebase/firestore';
+import { useFollowUpLogic } from '@/hooks/use-follow-up-logic';
+import { isPast, isSameDay } from 'date-fns';
 
 export default function Dashboard() {
-  const firestore = useFirestore();
-  const { user, isUserLoading } = useUser();
+  const { household, children, visits, isLoading } = useFollowUpLogic(new Date().getFullYear());
 
-  const householdsQuery = useMemoFirebase(
-    () => (user?.uid ? query(collection(firestore, 'households'), where('id', '==', user.uid)) : null),
-    [firestore, user]
-  );
-  const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
+  const recentRegistrations = household ? [household] : [];
 
-  const childrenQuery = useMemoFirebase(
-    () => (user?.uid ? query(collection(firestore, 'households', user.uid, 'children')) : null),
-    [firestore, user]
-  );
-  const { data: children, isLoading: childrenLoading } = useCollection<Child>(childrenQuery);
-  
-  const visitsQuery = useMemoFirebase(
-    () => (user?.uid ? query(collection(firestore, 'households', user.uid, 'followUpVisits')) : null),
-    [firestore, user]
-  );
-  const { data: followUpVisits, isLoading: visitsLoading } = useCollection<FollowUpVisit>(visitsQuery);
-
-  const recentRegistrationsQuery = useMemoFirebase(
-    () => (user?.uid ? query(collection(firestore, 'households'), where('id', '==', user.uid), limit(5)) : null),
-    [firestore, user]
-  );
-  const { data: recentRegistrations, isLoading: recentRegistrationsLoading } = useCollection<Household>(recentRegistrationsQuery);
-
-
-  const totalFamilies = households?.length ?? 0;
+  const totalFamilies = household ? 1 : 0;
   const totalChildren = children?.length ?? 0;
   const childrenStudying = children?.filter((c) => c.isStudying).length ?? 0;
   const childrenNotStudying = totalChildren - childrenStudying;
-  const visitsThisQuarter = followUpVisits?.filter(
+  
+  const visitsThisQuarter = visits?.filter(
     (v) => new Date(v.visitDate) > new Date(new Date().setMonth(new Date().getMonth() - 3))
   ).length ?? 0;
 
   const stats = [
-      { title: 'Total Families', value: totalFamilies, icon: Users, color: 'bg-orange-500', progress: 70 },
-      { title: 'Total Children', value: totalChildren, icon: Users, color: 'bg-pink-500', progress: 50 },
-      { title: 'Children Studying', value: childrenStudying, icon: TrendingUp, color: 'bg-green-500', progress: 80 },
-      { title: 'Visits This Quarter', value: visitsThisQuarter, icon: Clock, color: 'bg-purple-500', progress: 60 },
+      { title: 'Total Families', value: totalFamilies, icon: Users, color: 'bg-orange-500', progress: totalFamilies > 0 ? 100 : 0 },
+      { title: 'Total Children', value: totalChildren, icon: Users, color: 'bg-pink-500', progress: totalChildren },
+      { title: 'Children Studying', value: childrenStudying, icon: TrendingUp, color: 'bg-green-500', progress: totalChildren > 0 ? (childrenStudying/totalChildren) * 100 : 0 },
+      { title: 'Visits This Quarter', value: visitsThisQuarter, icon: Clock, color: 'bg-purple-500', progress: visitsThisQuarter > 0 ? (visitsThisQuarter/1)*100 : 0 },
   ];
-
-  const isLoading = isUserLoading || householdsLoading || childrenLoading || visitsLoading || recentRegistrationsLoading;
 
   return (
     <div className="flex min-h-screen w-full flex-col">
@@ -83,7 +60,7 @@ export default function Dashboard() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-                  <div className={`flex items-center justify-center h-8 w-8 rounded-lg ${stat.color}/20`}>
+                  <div className={`flex items-center justify-center h-8 w-8 rounded-lg bg-${stat.color.replace('bg-','text-')}/20`}>
                     <stat.icon className={`h-5 w-5 ${stat.color.replace('bg-', 'text-')}`} />
                   </div>
                 </div>

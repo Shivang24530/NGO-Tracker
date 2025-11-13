@@ -14,26 +14,23 @@ export default function ConductVisitPage() {
   const householdId = params.householdId as string;
   const firestore = useFirestore();
 
-  const { data: visit, isLoading: visitLoading } = useDoc<FollowUpVisit>(
-    useMemoFirebase(
+  const visitRef = useMemoFirebase(
       () => (visitId && householdId ? doc(firestore, `households/${householdId}/followUpVisits/${visitId}`) : null),
       [firestore, visitId, householdId]
-    )
   );
+  const { data: visit, isLoading: visitLoading } = useDoc<FollowUpVisit>(visitRef);
 
-  const { data: household, isLoading: householdLoading } = useDoc<Household>(
-    useMemoFirebase(
-        () => (householdId ? doc(firestore, 'households', householdId) : null),
-        [firestore, householdId]
-    )
+  const householdRef = useMemoFirebase(
+      () => (householdId ? doc(firestore, 'households', householdId) : null),
+      [firestore, householdId]
   );
+  const { data: household, isLoading: householdLoading } = useDoc<Household>(householdRef);
   
-  const { data: householdChildren, isLoading: childrenLoading } = useCollection<Child>(
-    useMemoFirebase(
-        () => (householdId ? collection(firestore, 'households', householdId, 'children') : null),
-        [firestore, householdId]
-    )
+  const childrenRef = useMemoFirebase(
+      () => (householdId ? collection(firestore, 'households', householdId, 'children') : null),
+      [firestore, householdId]
   );
+  const { data: householdChildren, isLoading: childrenLoading } = useCollection<Child>(childrenRef);
 
   const isLoading = visitLoading || householdLoading || childrenLoading;
 
