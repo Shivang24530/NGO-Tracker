@@ -6,120 +6,211 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { differenceInDays, parseISO, isWithinInterval, startOfMonth, endOfMonth } from 'date-fns';
+import {
+  isThisMonth,
+  isPast,
+  isSameDay,
+  endOfDay,
+} from 'date-fns';
 import { Badge } from '@/components/ui/badge';
-import { Clock, CalendarCheck, AlertTriangle } from 'lucide-react';
-import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import {
+  Clock,
+  CalendarCheck,
+  AlertCircle,
+  Users,
+  TrendingUp,
+} from 'lucide-react';
+import {
+  useCollection,
+  useFirestore,
+  useUser,
+  useMemoFirebase,
+} from '@/firebase';
 import type { Household, FollowUpVisit } from '@/lib/types';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit } from 'firebase/firestore';
 
-const VisitCard = ({ visit, household }: { visit: FollowUpVisit, household: Household | undefined }) => {
-
-  if (!visit || !household) {
-    return null;
-  }
-
-  const daysOverdue = differenceInDays(new Date(), new Date(visit.visitDate));
-
-  return (
-    <Card className="shadow-md hover:shadow-lg transition-shadow">
-      <CardHeader>
-        <CardTitle className="flex justify-between items-start">
-          {household.familyName}
-          {visit.status === 'Overdue' && (
-             <Badge variant="destructive">
-                <AlertTriangle className="mr-1 h-3 w-3" />
-                {daysOverdue} days overdue
-             </Badge>
-          )}
-        </CardTitle>
-        <CardDescription>{household.fullAddress}</CardDescription>
+const StatCard = ({ title, value, icon: Icon, color, isLoading }: { title: string; value: number | string, icon: React.ElementType, color: string, isLoading: boolean }) => (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <div className={`flex items-center justify-center h-8 w-8 rounded-full bg-${color}-100`}>
+             <Icon className={`h-5 w-5 text-${color}-600`} />
+        </div>
       </CardHeader>
       <CardContent>
-        <div className="text-sm text-muted-foreground space-y-2">
-            <p className="flex items-center"><Clock className="mr-2 h-4 w-4" /> Last visit: {new Date(visit.visitDate).toLocaleDateString()}</p>
-            <div className="flex items-center"><CalendarCheck className="mr-2 h-4 w-4" /> Visit Type: <Badge variant="secondary" className="ml-2">{visit.visitType}</Badge></div>
-        </div>
+        <div className="text-2xl font-bold">{isLoading ? '...' : value}</div>
       </CardContent>
-      <CardFooter>
-        <Button asChild className="w-full font-headline bg-primary hover:bg-primary/90">
-          <Link href={`/follow-ups/${visit.id}/conduct`}>Start Visit</Link>
-        </Button>
-      </CardFooter>
     </Card>
-  );
-};
+);
 
 export default function FollowUpsPage() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
 
   const visitsQuery = useMemoFirebase(
-    () => (user?.uid ? query(collection(firestore, 'households', user.uid, 'followUpVisits')) : null),
+    () =>
+      user?.uid
+        ? query(collection(firestore, 'households', user.uid, 'followUpVisits'))
+        : null,
     [firestore, user]
   );
-  const { data: followUpVisits, isLoading: visitsLoading } = useCollection<FollowUpVisit>(visitsQuery);
+  const { data: followUpVisits, isLoading: visitsLoading } =
+    useCollection<FollowUpVisit>(visitsQuery);
   
+  const recentVisitsQuery = useMemoFirebase(
+    () =>
+      user?.uid
+        ? query(
+            collection(firestore, 'households', user.uid, 'followUpVisits'),
+            where('status', '==', 'Completed'),
+            orderBy('visitDate', 'desc'),
+            limit(5)
+          )
+        : null,
+    [firestore, user]
+  );
+  const { data: recentVisits, isLoading: recentVisitsLoading } = useCollection<FollowUpVisit>(recentVisitsQuery);
+
   const householdsQuery = useMemoFirebase(
-    () => (user?.uid ? query(collection(firestore, 'households'), where('id', '==', user.uid)) : null),
+    () =>
+      user?.uid ? query(collection(firestore, 'households'), where('id', '==', user.uid)) : null,
     [firestore, user]
   );
-  const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
+  const { data: households, isLoading: householdsLoading } =
+    useCollection<Household>(householdsQuery);
+
+  const now = new Date();
+  const today = endOfDay(now);
+
+  const overdue =
+    followUpVisits?.filter(
+      (v) =>
+        v.status === 'Pending' &&
+        isPast(new Date(v.visitDate)) &&
+        !isSameDay(new Date(v.visitDate), now)
+    ) ?? [];
+  const upcoming =
+    followUpVisits?.filter(
+      (v) => v.status === 'Pending' && isThisMonth(new Date(v.visitDate))
+    ) ?? [];
+  const completed =
+    followUpVisits?.filter((v) => v.status === 'Completed') ?? [];
   
-  const overdue = followUpVisits?.filter((v) => v.status === 'Overdue') ?? [];
-  const upcoming = followUpVisits?.filter(
-    (v) => isWithinInterval(new Date(v.visitDate), { start: startOfMonth(new Date()), end: endOfMonth(new Date()) }) && v.status === 'Pending'
-  ) ?? [];
+  const totalFamilies = households?.length ?? 0;
 
-  const isLoading = isUserLoading || visitsLoading || householdsLoading;
+  const isLoading = isUserLoading || visitsLoading || householdsLoading || recentVisitsLoading;
 
-  const findHousehold = (householdId: string) => households?.find(h => h.id === householdId);
+  const findHousehold = (householdId: string) =>
+    households?.find((h) => h.id === householdId);
 
   return (
     <div className="flex min-h-screen w-full flex-col">
-      <PageHeader title="Follow-Up Visits" />
+      <PageHeader title="Follow-up Visits">
+        <p className="text-sm text-muted-foreground hidden md:block">
+           Track and manage quarterly visits to registered families
+        </p>
+      </PageHeader>
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
-        <Tabs defaultValue="overdue" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="overdue">
-              Overdue Visits ({isLoading ? '...' : overdue.length})
-            </TabsTrigger>
-            <TabsTrigger value="upcoming">
-              Upcoming This Month ({isLoading ? '...' : upcoming.length})
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="overdue">
-            {isLoading ? <p className="text-center py-16">Loading...</p> : overdue.length > 0 ? (
-                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mt-4">
-                    {overdue.map((visit) => <VisitCard key={visit.id} visit={visit} household={findHousehold(visit.householdId)} />)}
-                </div>
-            ) : (
-                <div className="text-center py-16 text-muted-foreground">
-                    <CalendarCheck className="mx-auto h-12 w-12" />
-                    <h3 className="mt-4 text-lg font-semibold">All Caught Up!</h3>
-                    <p>There are no overdue visits.</p>
-                </div>
-            )}
-          </TabsContent>
-          <TabsContent value="upcoming">
-             {isLoading ? <p className="text-center py-16">Loading...</p> : upcoming.length > 0 ? (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mt-4">
-                    {upcoming.map((visit) => <VisitCard key={visit.id} visit={visit} household={findHousehold(visit.householdId)} />)}
-                </div>
-            ) : (
-                <div className="text-center py-16 text-muted-foreground">
-                    <CalendarCheck className="mx-auto h-12 w-12" />
-                    <h3 className="mt-4 text-lg font-semibold">Nothing Scheduled</h3>
-                    <p>There are no upcoming visits scheduled for this month.</p>
-                </div>
-            )}
-          </TabsContent>
-        </Tabs>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <StatCard title="Overdue Visits" value={overdue.length} icon={AlertCircle} color="red" isLoading={isLoading} />
+            <StatCard title="Due This Month" value={upcoming.length} icon={Clock} color="orange" isLoading={isLoading} />
+            <StatCard title="Visits Completed" value={completed.length} icon={CalendarCheck} color="green" isLoading={isLoading} />
+            <StatCard title="Total Families" value={totalFamilies} icon={Users} color="blue" isLoading={isLoading} />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><AlertCircle className="h-5 w-5 text-red-500" /> Overdue Visits ({overdue.length})</CardTitle>
+                </CardHeader>
+                <CardContent>
+                {isLoading ? <p className="text-center py-8 text-muted-foreground">Loading...</p> : overdue.length > 0 ? (
+                    <div className="space-y-4">
+                        {overdue.map((visit) => {
+                            const household = findHousehold(visit.householdId);
+                            return (
+                                <Link href={`/follow-ups/${visit.id}/conduct`} key={visit.id} className="block border p-4 rounded-lg hover:bg-secondary">
+                                    <div className="flex justify-between items-center">
+                                        <p className="font-semibold">{household?.familyName}</p>
+                                        <p className="text-sm text-muted-foreground">{new Date(visit.visitDate).toLocaleDateString()}</p>
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">{household?.locationArea}</p>
+                                </Link>
+                            )
+                        })}
+                    </div>
+                ) : (
+                    <div className="text-center py-8 text-muted-foreground space-y-2">
+                        <CalendarCheck className="mx-auto h-12 w-12 text-green-500" />
+                        <h3 className="font-semibold">No overdue visits!</h3>
+                        <p>Great work!</p>
+                    </div>
+                )}
+                </CardContent>
+            </Card>
+             <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><Clock className="h-5 w-5 text-orange-500" /> Upcoming This Month ({upcoming.length})</CardTitle>
+                </CardHeader>
+                <CardContent>
+                {isLoading ? <p className="text-center py-8 text-muted-foreground">Loading...</p> : upcoming.length > 0 ? (
+                    <div className="space-y-4">
+                        {upcoming.map((visit) => {
+                             const household = findHousehold(visit.householdId);
+                             return (
+                                <Link href={`/follow-ups/${visit.id}/conduct`} key={visit.id} className="block border p-4 rounded-lg hover:bg-secondary">
+                                    <div className="flex justify-between items-center">
+                                        <p className="font-semibold">{household?.familyName}</p>
+                                        <p className="text-sm text-muted-foreground">{new Date(visit.visitDate).toLocaleDateString()}</p>
+                                    </div>
+                                     <p className="text-sm text-muted-foreground">{household?.locationArea}</p>
+                                </Link>
+                             )
+                        })}
+                    </div>
+                ) : (
+                    <div className="text-center py-8 text-muted-foreground space-y-2">
+                        <CalendarCheck className="mx-auto h-12 w-12" />
+                        <h3 className="font-semibold">No visits scheduled for this month</h3>
+                    </div>
+                )}
+                </CardContent>
+            </Card>
+        </div>
+        
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-green-600" /> Recent Visits</CardTitle>
+            </CardHeader>
+            <CardContent>
+                {isLoading ? <p className="text-center py-8 text-muted-foreground">Loading...</p> : recentVisits && recentVisits.length > 0 ? (
+                    <div className="space-y-2">
+                        {recentVisits.map(visit => {
+                             const household = findHousehold(visit.householdId);
+                             return (
+                                <div key={visit.id} className="border p-4 rounded-lg">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <p className="font-semibold">{household?.familyName || 'Unknown Family'}</p>
+                                            <Badge variant="secondary">{visit.visitType}</Badge>
+                                            <p className="text-sm text-muted-foreground">by {visit.visitedBy}</p>
+                                        </div>
+                                        <p className="text-sm text-muted-foreground">{new Date(visit.visitDate).toLocaleDateString()}</p>
+                                    </div>
+                                    {visit.notes && <p className="text-sm text-muted-foreground mt-2 italic">"{visit.notes}"</p>}
+                                </div>
+                             )
+                        })}
+                    </div>
+                ) : (
+                    <p className="text-center py-8 text-muted-foreground">No recent visits have been logged.</p>
+                )}
+            </CardContent>
+        </Card>
+
       </main>
     </div>
   );
