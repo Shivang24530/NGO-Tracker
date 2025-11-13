@@ -22,9 +22,12 @@ import {
   AlertCircle,
   Users,
   TrendingUp,
+  Loader2,
 } from 'lucide-react';
 import type { FollowUpVisit } from '@/lib/types';
 import { useFollowUpLogic } from '@/hooks/use-follow-up-logic';
+import { useFirestore } from '@/firebase';
+
 
 const StatCard = ({ title, value, icon: Icon, color, isLoading }: { title: string; value: number | string, icon: React.ElementType, color: string, isLoading: boolean }) => (
     <Card>
@@ -40,7 +43,7 @@ const StatCard = ({ title, value, icon: Icon, color, isLoading }: { title: strin
     </Card>
 );
 
-export default function FollowUpsPage() {
+function FollowUpsDetailsContent() {
   const { household, visits, isLoading } = useFollowUpLogic(new Date().getFullYear());
 
   const now = new Date();
@@ -67,15 +70,17 @@ export default function FollowUpsPage() {
   const totalFamilies = household ? 1 : 0;
   const householdName = household?.familyName;
 
+  if (isLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen w-full flex-col">
-      <PageHeader title="Follow-up Visits">
-        <p className="text-sm text-muted-foreground hidden md:block">
-           Track and manage quarterly visits to registered families
-        </p>
-      </PageHeader>
-      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <StatCard title="Overdue Visits" value={overdue.length} icon={AlertCircle} color="red" isLoading={isLoading} />
             <StatCard title="Due This Month" value={upcoming.length} icon={Clock} color="orange" isLoading={isLoading} />
             <StatCard title="Visits Completed" value={completed.length} icon={CalendarCheck} color="green" isLoading={isLoading} />
@@ -168,7 +173,29 @@ export default function FollowUpsPage() {
                 )}
             </CardContent>
         </Card>
+    </>
+  );
+}
 
+
+export default function FollowUpsPage() {
+  const firestore = useFirestore();
+
+  return (
+    <div className="flex min-h-screen w-full flex-col">
+      <PageHeader title="Follow-up Visits">
+        <p className="text-sm text-muted-foreground hidden md:block">
+           Track and manage quarterly visits to registered families
+        </p>
+      </PageHeader>
+      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+        {firestore ? (
+          <FollowUpsDetailsContent />
+        ) : (
+          <div className="flex flex-1 items-center justify-center">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          </div>
+        )}
       </main>
     </div>
   );
