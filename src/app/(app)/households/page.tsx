@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/card';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, Pen, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Pen, Trash2, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useDoc, useFirestore, useUser, useMemoFirebase } from '@/firebase';
 import type { Household } from '@/lib/types';
@@ -156,6 +156,12 @@ export default function AllHouseholdsPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem asChild>
+                                <Link href={`/households/${household.id}`}>
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  Visit Details
+                                </Link>
+                              </DropdownMenuItem>
                               <DropdownMenuItem asChild>
                                 <Link href={`/households/${household.id}/edit`}>
                                   <Pen className="mr-2 h-4 w-4" />

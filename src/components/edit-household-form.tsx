@@ -1,14 +1,14 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray } from 'react-hook-form';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import { doc, writeBatch, collection, getDocs, query, deleteDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
-
+import { LocationPicker } from '@/components/map/location-picker';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -65,8 +65,8 @@ const formSchema = z.object({
     .min(10, 'A valid contact number is required.')
     .regex(/^[+]?[0-9]+$/, 'Contact number can only contain digits and an optional leading "+".'),
   status: z.enum(['Active', 'Inactive', 'Migrated']),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
+  latitude: z.number({ required_error: "Please set a location on the map." }),
+  longitude: z.number({ required_error: "Please set a location on the map." }),
   children: z.array(childSchema),
   // Fields for adding a new child
   newChildName: z.string().optional(),
@@ -87,9 +87,9 @@ interface EditHouseholdFormProps {
 export function EditHouseholdForm({ household, initialChildren }: EditHouseholdFormProps) {
   const router = useRouter();
   const firestore = useFirestore();
-  const [isLocating, setIsLocating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [childrenToDelete, setChildrenToDelete] = useState<string[]>([]);
+  const [mapError, setMapError] = useState<string | null>(null);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -114,25 +114,21 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
-    control: form.control,
-    name: 'children',
-  });
+  const { fields, append, remove, control, setValue, watch } = form;
+  const latitude = watch('latitude');
+  const longitude = watch('longitude');
 
-  const handleGetLocation = () => {
-    setIsLocating(true);
-    // In a real app, this would use Capacitor's Geolocation API
-    setTimeout(() => {
-      const lat = 28.7041 + (Math.random() - 0.5) * 0.01;
-      const lng = 77.1025 + (Math.random() - 0.5) * 0.01;
-      form.setValue('latitude', lat, { shouldValidate: true });
-      form.setValue('longitude', lng, { shouldValidate: true });
-      setIsLocating(false);
-      toast({
-        title: 'Location Captured',
-        description: 'GPS coordinates have been successfully updated.',
-      });
-    }, 1500);
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  useEffect(() => {
+    if (!apiKey) {
+      setMapError("Google Maps API key is missing. Please add it to your .env file.");
+    }
+  }, [apiKey]);
+  
+  const handleLocationChange = (lat: number, lng: number) => {
+    setValue('latitude', lat, { shouldValidate: true });
+    setValue('longitude', lng, { shouldValidate: true });
   };
 
   const handleAddNewChild = () => {
@@ -283,18 +279,33 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
                 <FormField name="fullAddress" control={form.control} render={({ field }) => <FormItem><FormLabel>Full Address</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
               </div>
               <div className="md:col-span-2">
-                <FormItem>
-                  <FormLabel>GPS Location</FormLabel>
-                   <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center justify-between">
-                     <p className="text-sm text-green-900">
-                        Location Captured! (Lat: {form.watch('latitude')?.toFixed(4)}, Lng: {form.watch('longitude')?.toFixed(4)})
-                    </p>
-                    <Button type="button" variant="ghost" size="sm" onClick={handleGetLocation} disabled={isLocating}>
-                        {isLocating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        {isLocating ? 'Updating...' : 'Recapture'}
-                    </Button>
-                  </div>
-                </FormItem>
+                 <FormField
+                    control={control}
+                    name="latitude"
+                    render={() => (
+                      <FormItem>
+                        <FormLabel className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-primary" />GPS Location *</FormLabel>
+                        <FormDescription>Drag the pin to the exact house location on the map.</FormDescription>
+                        <FormControl>
+                          <div className="h-[400px] w-full rounded-lg overflow-hidden border">
+                            {apiKey && latitude && longitude ? (
+                              <LocationPicker 
+                                apiKey={apiKey}
+                                initialCenter={{lat: latitude, lng: longitude}}
+                                onLocationChange={handleLocationChange}
+                                currentLocation={{lat: latitude, lng: longitude}}
+                              />
+                            ) : (
+                               <div className="h-full w-full flex items-center justify-center bg-muted text-muted-foreground">
+                                {mapError ? <span className='text-destructive p-4'>{mapError}</span> : <Loader2 className="h-8 w-8 animate-spin" />}
+                              </div>
+                            )}
+                          </div>
+                        </FormControl>
+                         <FormMessage />
+                      </FormItem>
+                    )}
+                 />
               </div>
             </div>
           </CardContent>

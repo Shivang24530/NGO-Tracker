@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray } from 'react-hook-form';
 import * as z from 'zod';
@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { formatISO, addMonths, getYear } from 'date-fns';
-
+import { LocationPicker } from '@/components/map/location-picker';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -59,8 +59,8 @@ const formSchema = z.object({
     .string()
     .min(10, 'A valid contact number is required.')
     .regex(/^[+]?[0-9]+$/, 'Contact number can only contain digits and an optional leading "+".'),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
+  latitude: z.number({ required_error: "Please set a location on the map." }),
+  longitude: z.number({ required_error: "Please set a location on the map." }),
 
   // Step 2
   children: z.array(childSchema),
@@ -73,7 +73,7 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 const steps = [
-  { id: 1, title: 'Household Info', fields: ['familyName', 'fullAddress', 'locationArea', 'primaryContact'] as const },
+  { id: 1, title: 'Household Info', fields: ['familyName', 'fullAddress', 'locationArea', 'primaryContact', 'latitude', 'longitude'] as const },
   { id: 2, title: 'Children Details', fields: ['children'] as const },
   { id: 3, title: 'Photos', fields: [] as const },
 ];
@@ -111,8 +111,9 @@ export function RegisterHouseholdForm() {
   const firestore = useFirestore();
   const { user } = useUser();
   const [step, setStep] = useState(1);
-  const [isLocating, setIsLocating] = useState(false);
   const [isCapturing, setIsCapturing] = useState<'family' | 'house' | null>(null);
+  const [initialCenter, setInitialCenter] = useState<{lat: number, lng: number} | null>(null);
+  const [mapError, setMapError] = useState<string | null>(null);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -125,7 +126,7 @@ export function RegisterHouseholdForm() {
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, control } = useFieldArray({
     control: form.control,
     name: 'children',
   });
@@ -134,10 +135,39 @@ export function RegisterHouseholdForm() {
   const familyPhotoUrl = watch('familyPhotoUrl');
   const housePhotoUrl = watch('housePhotoUrl');
 
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  useEffect(() => {
+    if (!apiKey) {
+      setMapError("Google Maps API key is missing. Please add it to your .env file.");
+      return;
+    }
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          setInitialCenter({ lat: latitude, lng: longitude });
+          setValue('latitude', latitude);
+          setValue('longitude', longitude);
+        },
+        (error) => {
+          console.warn("Could not get user location, defaulting.", error);
+          // Default to a central location if permission is denied
+          setInitialCenter({ lat: 28.7041, lng: 77.1025 });
+        }
+      );
+    } else {
+        // Geolocation not supported, default
+        setInitialCenter({ lat: 28.7041, lng: 77.1025 });
+    }
+  }, [apiKey, setValue]);
+
 
   const handleNext = async () => {
     const currentStepFields = steps[step - 1].fields;
     const isValid = await form.trigger(currentStepFields);
+
     if (isValid) {
       if (step < steps.length) {
         setStep((s) => s + 1);
@@ -145,46 +175,20 @@ export function RegisterHouseholdForm() {
         // Final step, trigger submission
         await form.handleSubmit(onSubmit)();
       }
+    } else {
+       toast({
+        variant: "destructive",
+        title: "Incomplete Information",
+        description: "Please fill out all required fields before proceeding.",
+      });
     }
   };
 
   const handleBack = () => setStep((s) => s - 1);
-
-  const handleGetLocation = () => {
-    if (!navigator.geolocation) {
-      toast({
-        variant: 'destructive',
-        title: 'Geolocation Not Supported',
-        description: 'Your browser does not support location services.',
-      });
-      return;
-    }
-
-    setIsLocating(true);
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setValue('latitude', position.coords.latitude, { shouldValidate: true });
-        setValue('longitude', position.coords.longitude, { shouldValidate: true });
-        setIsLocating(false);
-        toast({
-          title: 'Location Captured',
-          description: 'GPS coordinates have been successfully fetched.',
-        });
-      },
-      (error) => {
-        setIsLocating(false);
-        toast({
-          variant: 'destructive',
-          title: 'Location Error',
-          description:
-            error.code === error.PERMISSION_DENIED
-              ? 'Permission denied. Please enable location services in your browser settings.'
-              : 'Could not fetch location. Please try again.',
-        });
-        console.error('Geolocation error:', error);
-      }
-    );
+  
+  const handleLocationChange = (lat: number, lng: number) => {
+    setValue('latitude', lat, { shouldValidate: true });
+    setValue('longitude', lng, { shouldValidate: true });
   };
   
   const handleCapturePhoto = (type: 'family' | 'house') => {
@@ -228,8 +232,8 @@ export function RegisterHouseholdForm() {
           primaryContact: values.primaryContact,
           status: 'Active' as const,
           nextFollowupDue: formatISO(addMonths(new Date(), 3)),
-          latitude: values.latitude || 28.7041,
-          longitude: values.longitude || 77.1025,
+          latitude: values.latitude,
+          longitude: values.longitude,
           familyPhotoUrl: values.familyPhotoUrl || 'https://picsum.photos/seed/h-new/600/400',
           housePhotoUrl: values.housePhotoUrl || 'https://picsum.photos/seed/h-new-house/600/400',
           toiletAvailable: false,
@@ -299,16 +303,33 @@ export function RegisterHouseholdForm() {
             <FormField name="familyName" control={form.control} render={({ field }) => <FormItem><FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-primary" />Family Name *</FormLabel><FormControl><Input placeholder="e.g., Kumar Family" {...field} /></FormControl><FormMessage /></FormItem>} />
             <FormField name="fullAddress" control={form.control} render={({ field }) => <FormItem><FormLabel className="flex items-center"><Home className="mr-2 h-4 w-4 text-primary" />Full Address *</FormLabel><FormControl><Input placeholder="Complete address with landmarks" {...field} /></FormControl><FormMessage /></FormItem>} />
             <FormField name="locationArea" control={form.control} render={({ field }) => <FormItem><FormLabel className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-primary" />Location/Area *</FormLabel><FormControl><Input placeholder="e.g., Sector 15, Dharavi" {...field} /></FormControl><FormMessage /></FormItem>} />
-            <FormItem>
-              <FormLabel className="flex items-center">GPS Location</FormLabel>
-              <div className="flex items-center gap-4">
-                 <Input readOnly value={form.watch('latitude') ? `${form.watch('latitude')}, ${form.watch('longitude')}`: ''} placeholder="GPS coordinates will appear here" />
-                 <Button type="button" variant="outline" onClick={handleGetLocation} disabled={isLocating}>
-                  {isLocating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapPin className="mr-2 h-4 w-4" />}
-                  {isLocating ? 'Fetching...' : 'Get Current Location'}
-                </Button>
-              </div>
-            </FormItem>
+            <FormField
+              control={control}
+              name="latitude"
+              render={() => (
+                  <FormItem>
+                    <FormLabel className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-primary" />GPS Location *</FormLabel>
+                    <FormDescription>Drag the pin to the exact house location on the map.</FormDescription>
+                    <FormControl>
+                        <div className="h-[400px] w-full rounded-lg overflow-hidden border">
+                           {apiKey && initialCenter ? (
+                            <LocationPicker 
+                                apiKey={apiKey} 
+                                initialCenter={initialCenter} 
+                                onLocationChange={handleLocationChange}
+                                currentLocation={{lat: watch('latitude')!, lng: watch('longitude')!}}
+                            />
+                            ) : (
+                            <div className="h-full w-full flex items-center justify-center bg-muted text-muted-foreground">
+                                {mapError ? <span className='text-destructive p-4'>{mapError}</span> : <Loader2 className="h-8 w-8 animate-spin" />}
+                            </div>
+                            )}
+                        </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+              )}
+            />
             <FormField name="primaryContact" control={form.control} render={({ field }) => <FormItem><FormLabel className="flex items-center"><Phone className="mr-2 h-4 w-4 text-primary" />Primary Contact Number *</FormLabel><FormControl><Input placeholder="10-digit mobile number" {...field} /></FormControl><FormMessage /></FormItem>} />
           </div>
         );
@@ -404,9 +425,9 @@ export function RegisterHouseholdForm() {
 
   const stepTitles = ["Household Information", "Children Details", "Photos"];
   const stepDescriptions = [
-      "Enter the basic details of the family", 
-      "Add details for each child in the household", 
-      "Upload photos of the family and their house"
+      "Enter the basic details of the family and set their location.", 
+      "Add details for each child in the household.", 
+      "Upload photos of the family and their house."
     ];
   const nextButtonLabels = ["Next: Add Children", "Next: Add Photos", "Complete Registration"];
 
@@ -422,7 +443,7 @@ export function RegisterHouseholdForm() {
                 <CardDescription>{stepDescriptions[step-1]}</CardDescription>
             </CardHeader>
             <CardContent>
-                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                 <div className="space-y-8">
                     {renderStepContent()}
 
                     <div className="flex justify-between mt-12">
@@ -440,7 +461,7 @@ export function RegisterHouseholdForm() {
                             )}
                         </Button>
                     </div>
-                </form>
+                </div>
             </CardContent>
         </Card>
     </Form>
