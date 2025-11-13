@@ -21,7 +21,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, where, collectionGroup } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import type { Child, Household } from '@/lib/types';
 import { useEffect, useState } from 'react';
 
@@ -37,13 +37,12 @@ export default function ProgressTrackingPage() {
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
   const childrenQuery = useMemoFirebase(
-    () => (user?.uid ? query(collectionGroup(firestore, 'children'), where('householdId', '==', user.uid)) : null),
+    () => (user?.uid ? collection(firestore, 'households', user.uid, 'children') : null),
     [firestore, user]
   );
   const { data: children, isLoading: childrenLoading } = useCollection<Child>(childrenQuery);
   
   useEffect(() => {
-    // Check if both user is loaded and children data is available
     if (!isUserLoading && children) {
       const childrenWithRandomStatus = children.map(child => ({
         ...child,
@@ -51,7 +50,7 @@ export default function ProgressTrackingPage() {
       }));
       setChildrenWithStatus(childrenWithRandomStatus);
     }
-  }, [children, isUserLoading]); // Depend on both children and isUserLoading
+  }, [children, isUserLoading]); 
 
 
   const isLoading = isUserLoading || householdsLoading || childrenLoading;
