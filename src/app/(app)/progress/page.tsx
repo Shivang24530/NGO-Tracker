@@ -21,7 +21,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, collectionGroup } from 'firebase/firestore';
+import { collection, query, where, collectionGroup } from 'firebase/firestore';
 import type { Child, Household } from '@/lib/types';
 import { useEffect, useState } from 'react';
 
@@ -31,26 +31,27 @@ export default function ProgressTrackingPage() {
   const [childrenWithStatus, setChildrenWithStatus] = useState<(Child & { status: 'Improved' | 'Declined' })[]>([]);
 
   const householdsQuery = useMemoFirebase(
-    () => (user?.uid ? collection(firestore, 'households') : null),
+    () => (user?.uid ? query(collection(firestore, 'households'), where('id', '==', user.uid)) : null),
     [firestore, user]
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
   const childrenQuery = useMemoFirebase(
-    () => (user?.uid ? collectionGroup(firestore, 'children') : null),
+    () => (user?.uid ? query(collectionGroup(firestore, 'children'), where('householdId', '==', user.uid)) : null),
     [firestore, user]
   );
   const { data: children, isLoading: childrenLoading } = useCollection<Child>(childrenQuery);
   
   useEffect(() => {
-    if (children) {
+    // Check if both user is loaded and children data is available
+    if (!isUserLoading && children) {
       const childrenWithRandomStatus = children.map(child => ({
         ...child,
         status: Math.random() > 0.5 ? 'Improved' : 'Declined' as 'Improved' | 'Declined',
       }));
       setChildrenWithStatus(childrenWithRandomStatus);
     }
-  }, [children]);
+  }, [children, isUserLoading]); // Depend on both children and isUserLoading
 
 
   const isLoading = isUserLoading || householdsLoading || childrenLoading;
@@ -59,7 +60,8 @@ export default function ProgressTrackingPage() {
   const declinedCount = childrenWithStatus.filter(c => c.status === 'Declined').length;
   
   const findHouseholdName = (householdId: string) => {
-    return households?.find(h => h.id === householdId)?.familyName || '...';
+    if (!households) return '...';
+    return households.find(h => h.id === householdId)?.familyName || '...';
   }
 
   return (
