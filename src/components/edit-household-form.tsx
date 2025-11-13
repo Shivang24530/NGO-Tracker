@@ -43,6 +43,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+import { Checkbox } from './ui/checkbox';
 
 
 const childSchema = z.object({
@@ -106,8 +107,8 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
         age: c.age, 
         gender: c.gender,
         isStudying: c.isStudying,
-        currentClass: c.currentClass,
-        schoolName: c.schoolName,
+        currentClass: c.currentClass || '',
+        schoolName: c.schoolName || '',
       })),
       newChildStudyingStatus: 'Not Studying'
     },
@@ -148,8 +149,8 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
             age, 
             gender, 
             isStudying: studyingStatus === 'Studying',
-            currentClass: studyingStatus === 'Studying' ? currentClass : 'N/A',
-            schoolName: studyingStatus === 'Studying' ? schoolName : 'N/A'
+            currentClass: studyingStatus === 'Studying' ? currentClass : '',
+            schoolName: studyingStatus === 'Studying' ? schoolName : ''
         });
         // Reset fields
         form.setValue('newChildName', '');
@@ -222,8 +223,8 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
                     age: child.age, 
                     gender: child.gender,
                     isStudying: child.isStudying,
-                    currentClass: child.currentClass,
-                    schoolName: child.schoolName,
+                    currentClass: child.isStudying ? child.currentClass : '',
+                    schoolName: child.isStudying ? child.schoolName : '',
                 });
             } else {
                 // Add new child
@@ -235,8 +236,8 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
                     age: child.age,
                     gender: child.gender,
                     isStudying: child.isStudying,
-                    currentClass: child.currentClass || 'N/A',
-                    schoolName: child.schoolName || 'N/A',
+                    currentClass: child.isStudying ? child.currentClass : '',
+                    schoolName: child.isStudying ? child.schoolName : '',
                 });
             }
         });
@@ -314,6 +315,26 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
                     <FormField control={form.control} name={`children.${index}.age`} render={({ field }) => <FormItem><FormLabel>Age</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>} />
                     <FormField control={form.control} name={`children.${index}.gender`} render={({ field }) => <FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select><FormMessage /></FormItem>} />
                  </div>
+                 <FormField
+                    control={form.control}
+                    name={`children.${index}.isStudying`}
+                    render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow-sm">
+                            <FormControl>
+                                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                                <FormLabel>Currently Studying?</FormLabel>
+                            </div>
+                        </FormItem>
+                    )}
+                 />
+                {form.watch(`children.${index}.isStudying`) && (
+                    <div className="grid md:grid-cols-2 gap-4 pl-2 pt-2 border-l-2 ml-2">
+                        <FormField control={form.control} name={`children.${index}.currentClass`} render={({ field }) => <FormItem><FormLabel>Current Class</FormLabel><FormControl><Input placeholder="e.g., 2nd Class" {...field} /></FormControl><FormMessage /></FormItem>} />
+                        <FormField control={form.control} name={`children.${index}.schoolName`} render={({ field }) => <FormItem><FormLabel>School Name</FormLabel><FormControl><Input placeholder="e.g., Local Public School" {...field} /></FormControl><FormMessage /></FormItem>} />
+                    </div>
+                )}
                  <AlertDialog>
                      <AlertDialogTrigger asChild>
                         <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 text-destructive hover:bg-destructive/10 hover:text-destructive">
@@ -339,8 +360,8 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
                 <h4 className="font-medium mb-4">Add New Child</h4>
                  <div className="space-y-4 p-4 border rounded-lg bg-secondary/30">
                     <div className="grid md:grid-cols-3 gap-4">
-                        <FormField control={form.control} name="newChildName" render={({ field }) => <FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="Child's full name" {...field} /></FormControl></FormItem>} />
-                        <FormField control={form.control} name="newChildAge" render={({ field }) => <FormItem><FormLabel>Age</FormLabel><FormControl><Input type="number" placeholder="e.g. 8" {...field} onChange={event => field.onChange(+event.target.value)} /></FormControl></FormItem>} />
+                        <FormField control={form.control} name="newChildName" render={({ field }) => <FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="Child's full name" {...field} value={field.value || ''}/></FormControl></FormItem>} />
+                        <FormField control={form.control} name="newChildAge" render={({ field }) => <FormItem><FormLabel>Age</FormLabel><FormControl><Input type="number" placeholder="e.g. 8" {...field} value={field.value || ''} onChange={event => field.onChange(+event.target.value)} /></FormControl></FormItem>} />
                         <FormField control={form.control} name="newChildGender" render={({ field }) => <FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select></FormItem>} />
                     </div>
                      <FormField
@@ -371,8 +392,8 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
                     />
                     {form.watch('newChildStudyingStatus') === 'Studying' && (
                         <div className="grid md:grid-cols-2 gap-4 pt-2">
-                            <FormField control={form.control} name="newChildCurrentClass" render={({ field }) => <FormItem><FormLabel>Current Class</FormLabel><FormControl><Input placeholder="e.g., 2nd Class" {...field} /></FormControl></FormItem>} />
-                            <FormField control={form.control} name="newChildSchoolName" render={({ field }) => <FormItem><FormLabel>School Name</FormLabel><FormControl><Input placeholder="e.g., Local Public School" {...field} /></FormControl></FormItem>} />
+                            <FormField control={form.control} name="newChildCurrentClass" render={({ field }) => <FormItem><FormLabel>Current Class</FormLabel><FormControl><Input placeholder="e.g., 2nd Class" {...field} value={field.value || ''} /></FormControl></FormItem>} />
+                            <FormField control={form.control} name="newChildSchoolName" render={({ field }) => <FormItem><FormLabel>School Name</FormLabel><FormControl><Input placeholder="e.g., Local Public School" {...field} value={field.value || ''} /></FormControl></FormItem>} />
                         </div>
                     )}
 
@@ -400,5 +421,3 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
     </Form>
   );
 }
-
-    
