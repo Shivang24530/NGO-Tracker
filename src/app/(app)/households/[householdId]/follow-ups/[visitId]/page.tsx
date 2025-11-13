@@ -11,31 +11,27 @@ import { Loader2 } from 'lucide-react';
 export default function ConductVisitPage() {
   const params = useParams();
   const visitId = params.visitId as string;
-  const householdId = params.householdId as string; // This will be needed if we create new visits
+  const householdId = params.householdId as string;
   const firestore = useFirestore();
 
-  // We need to know the household to get the visit
-  // The householdId might not be in the params if we just have visitId
-  // Let's assume for now we get householdId from the visit doc itself.
-  
   const { data: visit, isLoading: visitLoading } = useDoc<FollowUpVisit>(
     useMemoFirebase(
-      () => (visitId ? doc(firestore, `households/${householdId}/followUpVisits/${visitId}`) : null),
+      () => (visitId && householdId ? doc(firestore, `households/${householdId}/followUpVisits/${visitId}`) : null),
       [firestore, visitId, householdId]
     )
   );
 
   const { data: household, isLoading: householdLoading } = useDoc<Household>(
     useMemoFirebase(
-        () => (visit?.householdId ? doc(firestore, 'households', visit.householdId) : null),
-        [firestore, visit]
+        () => (householdId ? doc(firestore, 'households', householdId) : null),
+        [firestore, householdId]
     )
   );
   
   const { data: householdChildren, isLoading: childrenLoading } = useCollection<Child>(
     useMemoFirebase(
-        () => (visit?.householdId ? collection(firestore, 'households', visit.householdId, 'children') : null),
-        [firestore, visit]
+        () => (householdId ? collection(firestore, 'households', householdId, 'children') : null),
+        [firestore, householdId]
     )
   );
 

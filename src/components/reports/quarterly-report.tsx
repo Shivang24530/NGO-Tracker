@@ -252,7 +252,7 @@ export function QuarterlyReport() {
                                                     <CheckCircle2 className="h-5 w-5 text-green-600 ml-auto" />
                                                 ) : (
                                                     <Button variant="ghost" size="sm" asChild disabled={!h.visitId}>
-                                                        <Link href={`/follow-ups/${h.visitId}/conduct?householdId=${h.id}`}>
+                                                        <Link href={`/households/${h.id}/follow-ups/${h.visitId}/conduct`}>
                                                             <PenSquare className="mr-2 h-4 w-4"/>
                                                             Start Survey
                                                         </Link>
