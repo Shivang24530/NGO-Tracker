@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -150,17 +151,40 @@ export function RegisterHouseholdForm() {
   const handleBack = () => setStep((s) => s - 1);
 
   const handleGetLocation = () => {
-    setIsLocating(true);
-    // Simulate Capacitor Geolocation API call
-    setTimeout(() => {
-      setValue('latitude', 28.7041, { shouldValidate: true });
-      setValue('longitude', 77.1025, { shouldValidate: true });
-      setIsLocating(false);
+    if (!navigator.geolocation) {
       toast({
-        title: 'Location Captured',
-        description: 'GPS coordinates have been successfully fetched.',
+        variant: 'destructive',
+        title: 'Geolocation Not Supported',
+        description: 'Your browser does not support location services.',
       });
-    }, 1500);
+      return;
+    }
+
+    setIsLocating(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setValue('latitude', position.coords.latitude, { shouldValidate: true });
+        setValue('longitude', position.coords.longitude, { shouldValidate: true });
+        setIsLocating(false);
+        toast({
+          title: 'Location Captured',
+          description: 'GPS coordinates have been successfully fetched.',
+        });
+      },
+      (error) => {
+        setIsLocating(false);
+        toast({
+          variant: 'destructive',
+          title: 'Location Error',
+          description:
+            error.code === error.PERMISSION_DENIED
+              ? 'Permission denied. Please enable location services in your browser settings.'
+              : 'Could not fetch location. Please try again.',
+        });
+        console.error('Geolocation error:', error);
+      }
+    );
   };
   
   const handleCapturePhoto = (type: 'family' | 'house') => {
