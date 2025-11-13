@@ -34,7 +34,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { MapPin, Camera, Trash2, PlusCircle, Loader2, Users, Home, Phone, ArrowRight } from 'lucide-react';
+import { MapPin, Camera, Trash2, PlusCircle, Loader2, Users, Home, Phone, ArrowRight, Upload } from 'lucide-react';
 import placeholderImages from '@/lib/placeholder-images.json';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { cn } from '@/lib/utils';
@@ -111,7 +111,8 @@ export function RegisterHouseholdForm() {
   const firestore = useFirestore();
   const { user } = useUser();
   const [step, setStep] = useState(1);
-  const [isCapturing, setIsCapturing] = useState<'family' | 'house' | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isProcessing, setIsProcessing] = useState<'family' | 'house' | 'family-upload' | 'house-upload' | null>(null);
   const [initialCenter, setInitialCenter] = useState<{lat: number, lng: number} | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
 
@@ -192,40 +193,62 @@ export function RegisterHouseholdForm() {
   };
   
   const handleCapturePhoto = (type: 'family' | 'house') => {
-    setIsCapturing(type);
+    setIsProcessing(type);
     // Simulate Capacitor Camera API call
     setTimeout(() => {
-        const photoUrl = type === 'family' ? placeholderImages.placeholderImages.find(p => p.id === "family-photo-1")?.imageUrl : placeholderImages.placeholderImages.find(p => p.id === "house-photo-1")?.imageUrl
+        const photoUrl = type === 'family' 
+          ? placeholderImages.placeholderImages.find(p => p.id === "family-photo-1")?.imageUrl 
+          : placeholderImages.placeholderImages.find(p => p.id === "house-photo-1")?.imageUrl
         if (photoUrl) {
             setValue(type === 'family' ? 'familyPhotoUrl' : 'housePhotoUrl', photoUrl, { shouldValidate: true });
         }
-        setIsCapturing(null);
+        setIsProcessing(null);
         toast({
             title: 'Photo Captured',
             description: `The ${type} photo has been saved.`,
         });
-    }, 2000);
+    }, 1500);
+  };
+
+  const handleUploadPhoto = (type: 'family' | 'house') => {
+    const processType = type === 'family' ? 'family-upload' : 'house-upload';
+    setIsProcessing(processType);
+    // Simulate file selection and upload
+    setTimeout(() => {
+      // Using different seeds for uploaded photos
+      const photoUrl = type === 'family' 
+          ? 'https://picsum.photos/seed/family-upload/600/400' 
+          : 'https://picsum.photos/seed/house-upload/600/400';
+      
+      setValue(type === 'family' ? 'familyPhotoUrl' : 'housePhotoUrl', photoUrl, { shouldValidate: true });
+      setIsProcessing(null);
+      toast({
+          title: 'Photo Uploaded',
+          description: `A new ${type} photo has been uploaded.`,
+      });
+    }, 1500);
   };
 
 
   async function onSubmit(values: FormData) {
+    setIsSubmitting(true);
     if (!user) {
         toast({
             variant: "destructive",
             title: "Authentication Error",
             description: "You must be logged in to register a family.",
         });
+        setIsSubmitting(false);
         return;
     }
 
     try {
         const batch = writeBatch(firestore);
         
-        // Use user's UID for the household ID to enforce ownership
         const householdRef = doc(firestore, 'households', user.uid);
 
         const newHouseholdData = {
-          id: user.uid, // Household ID is the user's UID
+          id: user.uid,
           familyName: values.familyName,
           fullAddress: values.fullAddress,
           locationArea: values.locationArea,
@@ -234,8 +257,8 @@ export function RegisterHouseholdForm() {
           nextFollowupDue: formatISO(addMonths(new Date(), 3)),
           latitude: values.latitude,
           longitude: values.longitude,
-          familyPhotoUrl: values.familyPhotoUrl || 'https://picsum.photos/seed/h-new/600/400',
-          housePhotoUrl: values.housePhotoUrl || 'https://picsum.photos/seed/h-new-house/600/400',
+          familyPhotoUrl: values.familyPhotoUrl || 'https://picsum.photos/seed/default-family/600/400',
+          housePhotoUrl: values.housePhotoUrl || 'https://picsum.photos/seed/default-house/600/400',
           toiletAvailable: false,
           waterSupply: 'Other' as const,
           electricity: false,
@@ -258,12 +281,11 @@ export function RegisterHouseholdForm() {
             });
         });
         
-        // Create the 4 quarterly visits for the current year
         const visitsColRef = collection(householdRef, 'followUpVisits');
         const year = getYear(new Date());
 
         for (let qNum = 1; qNum <= 4; qNum++) {
-            const quarterDate = new Date(year, (qNum - 1) * 3 + 1, 15); // Mid of the second month of the quarter
+            const quarterDate = new Date(year, (qNum - 1) * 3 + 1, 15);
             const newVisitRef = doc(visitsColRef);
             const newVisitData: Omit<FollowUpVisit, 'childProgressUpdates'> = {
                 id: newVisitRef.id,
@@ -276,7 +298,6 @@ export function RegisterHouseholdForm() {
             };
             batch.set(newVisitRef, newVisitData);
         }
-
 
         await batch.commit();
 
@@ -292,6 +313,8 @@ export function RegisterHouseholdForm() {
             title: "Registration Failed",
             description: "An error occurred while saving the data. Please try again.",
         });
+    } finally {
+        setIsSubmitting(false);
     }
   }
 
@@ -400,21 +423,37 @@ export function RegisterHouseholdForm() {
       case 3:
         return (
             <div className="grid md:grid-cols-2 gap-8">
-              <div className="space-y-2">
+              <div className="space-y-4">
                 <FormLabel>Family Photo</FormLabel>
-                {familyPhotoUrl ? <Image src={familyPhotoUrl} alt="Family" width={600} height={400} className="rounded-lg border aspect-video object-cover" data-ai-hint="family portrait"/> : <div className="border-dashed border-2 rounded-lg aspect-video flex items-center justify-center text-muted-foreground bg-secondary/30">No photo</div>}
-                <Button type="button" variant="outline" className="w-full" onClick={() => handleCapturePhoto('family')} disabled={isCapturing === 'family'}>
-                    {isCapturing === 'family' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-                    {isCapturing === 'family' ? 'Capturing...' : familyPhotoUrl ? 'Retake Family Photo' : 'Capture Family Photo'}
-                </Button>
+                <div className="border-dashed border-2 rounded-lg aspect-video flex items-center justify-center text-muted-foreground bg-secondary/30 overflow-hidden">
+                  {familyPhotoUrl ? <Image src={familyPhotoUrl} alt="Family" width={600} height={400} className="w-full h-full object-cover" data-ai-hint="family portrait"/> : <span>No photo</span>}
+                </div>
+                <div className="flex gap-2">
+                    <Button type="button" variant="outline" className="w-full" onClick={() => handleCapturePhoto('family')} disabled={!!isProcessing}>
+                        {isProcessing === 'family' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
+                        {isProcessing === 'family' ? 'Capturing...' : 'Take Photo'}
+                    </Button>
+                    <Button type="button" variant="outline" className="w-full" onClick={() => handleUploadPhoto('family')} disabled={!!isProcessing}>
+                        {isProcessing === 'family-upload' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                        {isProcessing === 'family-upload' ? 'Uploading...' : 'Upload Photo'}
+                    </Button>
+                </div>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-4">
                 <FormLabel>House Photo</FormLabel>
-                {housePhotoUrl ? <Image src={housePhotoUrl} alt="House" width={600} height={400} className="rounded-lg border aspect-video object-cover" data-ai-hint="modest house" /> : <div className="border-dashed border-2 rounded-lg aspect-video flex items-center justify-center text-muted-foreground bg-secondary/30">No photo</div>}
-                <Button type="button" variant="outline" className="w-full" onClick={() => handleCapturePhoto('house')} disabled={isCapturing === 'house'}>
-                    {isCapturing === 'house' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-                    {isCapturing === 'house' ? 'Capturing...' : housePhotoUrl ? 'Retake House Photo' : 'Capture House Photo'}
-                </Button>
+                <div className="border-dashed border-2 rounded-lg aspect-video flex items-center justify-center text-muted-foreground bg-secondary/30 overflow-hidden">
+                    {housePhotoUrl ? <Image src={housePhotoUrl} alt="House" width={600} height={400} className="w-full h-full object-cover" data-ai-hint="modest house" /> : <span>No photo</span>}
+                </div>
+                <div className="flex gap-2">
+                    <Button type="button" variant="outline" className="w-full" onClick={() => handleCapturePhoto('house')} disabled={!!isProcessing}>
+                        {isProcessing === 'house' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
+                        {isProcessing === 'house' ? 'Capturing...' : 'Take Photo'}
+                    </Button>
+                     <Button type="button" variant="outline" className="w-full" onClick={() => handleUploadPhoto('house')} disabled={!!isProcessing}>
+                        {isProcessing === 'house-upload' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                        {isProcessing === 'house-upload' ? 'Uploading...' : 'Upload Photo'}
+                    </Button>
+                </div>
               </div>
             </div>
         );
@@ -427,7 +466,7 @@ export function RegisterHouseholdForm() {
   const stepDescriptions = [
       "Enter the basic details of the family and set their location.", 
       "Add details for each child in the household.", 
-      "Upload photos of the family and their house."
+      "Optionally, add photos of the family and their house."
     ];
   const nextButtonLabels = ["Next: Add Children", "Next: Add Photos", "Complete Registration"];
 
@@ -443,7 +482,7 @@ export function RegisterHouseholdForm() {
                 <CardDescription>{stepDescriptions[step-1]}</CardDescription>
             </CardHeader>
             <CardContent>
-                 <div className="space-y-8">
+                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                     {renderStepContent()}
 
                     <div className="flex justify-between mt-12">
@@ -451,17 +490,19 @@ export function RegisterHouseholdForm() {
                             <Button type="button" variant="secondary" onClick={handleBack}>Back</Button>
                         ) : <div></div>}
                         
-                        <Button type="button" onClick={handleNext} className="ml-auto">
+                        <Button type="button" onClick={handleNext} disabled={isSubmitting}>
+                            {isSubmitting && step === steps.length ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+
                             {step < steps.length ? (
                                 <>
                                 {nextButtonLabels[step - 1]} <ArrowRight className="ml-2 h-4 w-4" />
                                 </>
                             ) : (
-                                nextButtonLabels[step - 1]
+                                isSubmitting ? 'Submitting...' : nextButtonLabels[step - 1]
                             )}
                         </Button>
                     </div>
-                </div>
+                </form>
             </CardContent>
         </Card>
     </Form>
