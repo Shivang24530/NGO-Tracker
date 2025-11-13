@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { MapPin, Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 export default function MapOverviewPage() {
     const firestore = useFirestore();
@@ -27,10 +27,12 @@ export default function MapOverviewPage() {
     );
     const { data: followUpVisits, isLoading: visitsLoading } = useCollection<FollowUpVisit>(visitsQuery);
 
-    const householdsWithVisits = useMemoFirebase(() => {
+    const householdsWithVisits = useMemo(() => {
         if (!households || !followUpVisits) return [];
         return households.map(h => {
             const visit = followUpVisits.find(v => v.householdId === h.id);
+            // This is a simplified status. A more robust solution would check dates.
+            const status = visit?.status === 'Completed' ? 'Completed' : 'Pending';
             return {
                 ...h,
                 visitStatus: visit?.status,
@@ -51,7 +53,7 @@ export default function MapOverviewPage() {
                         <MapPin className="h-4 w-4" />
                         <AlertTitle>Configuration Error</AlertTitle>
                         <AlertDescription>
-                            Google Maps API key is missing. Please add <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to your <code>.env</code> file.
+                            Google Maps API key is missing. Please add <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to your <code>.env.local</code> file.
                         </AlertDescription>
                     </Alert>
                 </main>
@@ -69,11 +71,11 @@ export default function MapOverviewPage() {
                         <AlertTitle>Map Authentication Failed</AlertTitle>
                         <AlertDescription>
                             <p>The Google Maps API key provided is not working. Please check the following:</p>
-                            <ul className="list-disc pl-5 mt-2">
-                                <li>The API key in your <code>.env</code> file is correct.</li>
+                            <ul className="list-disc pl-5 mt-2 space-y-1">
+                                <li>The API key in your <code>.env.local</code> file is correct.</li>
                                 <li>The "Maps JavaScript API" is enabled in your Google Cloud Console.</li>
                                 <li>A billing account is linked to your Google Cloud project.</li>
-                                <li>The key's restrictions (e.g., HTTP referrers) allow requests from this app's domain.</li>
+                                <li><b>Important:</b> The key's "Application restrictions" are set to "HTTP referrers" and your app's domain (e.g., <code>*.your-domain.com</code>) is on the allowed list to prevent unauthorized use.</li>
                             </ul>
                         </AlertDescription>
                     </Alert>

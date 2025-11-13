@@ -1,3 +1,4 @@
+
 'use client';
 
 import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow } from '@vis.gl/react-google-maps';
@@ -5,6 +6,7 @@ import type { Household, FollowUpVisit } from '@/lib/types';
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
+import { isPast } from 'date-fns';
 
 type HouseholdWithVisit = Household & { visitStatus?: FollowUpVisit['status'] };
 
@@ -16,17 +18,25 @@ interface MapViewProps {
 export function MapView({ households, apiKey }: MapViewProps) {
   const [selectedHousehold, setSelectedHousehold] = useState<HouseholdWithVisit | null>(null);
 
-  const getPinColor = (status?: FollowUpVisit['status']) => {
-    switch (status) {
-      case 'Overdue':
-        return '#ef4444'; // red-500
-      case 'Pending':
-        return '#facc15'; // yellow-400
-      case 'Completed':
-      default:
-        return '#3b82f6'; // blue-500
+  const getPinColor = (household: HouseholdWithVisit) => {
+    // A more accurate status based on next follow-up date
+    const isOverdue = isPast(new Date(household.nextFollowupDue));
+
+    if (household.visitStatus === 'Completed' && !isOverdue) {
+       return '#22c55e'; // green-500
     }
+    if (isOverdue) {
+      return '#ef4444'; // red-500
+    }
+    return '#facc15'; // yellow-400
   };
+
+  const getStatusText = (household: HouseholdWithVisit) => {
+    const isOverdue = isPast(new Date(household.nextFollowupDue));
+    if (isOverdue) return 'Overdue';
+    if (household.visitStatus === 'Completed') return 'Up-to-date';
+    return 'Upcoming';
+  }
 
   return (
     <APIProvider apiKey={apiKey}>
@@ -46,7 +56,7 @@ export function MapView({ households, apiKey }: MapViewProps) {
                         onClick={() => setSelectedHousehold(household)}
                     >
                          <Pin 
-                            background={getPinColor(household.visitStatus)} 
+                            background={getPinColor(household)}
                             borderColor={'#fff'} 
                             glyphColor={'#fff'} 
                         />
@@ -62,8 +72,10 @@ export function MapView({ households, apiKey }: MapViewProps) {
                             <h3 className="font-bold text-base font-headline">{selectedHousehold.familyName}</h3>
                             <p className="text-sm text-muted-foreground">{selectedHousehold.fullAddress}</p>
                             <div className="mt-2">
-                                <span className="font-semibold">Status: </span> 
-                                <Badge variant={selectedHousehold.visitStatus === "Overdue" ? "destructive" : "secondary"}>{selectedHousehold.visitStatus}</Badge>
+                                <span className="font-semibold">Visit Status: </span> 
+                                <Badge variant={getStatusText(selectedHousehold) === "Overdue" ? "destructive" : "secondary"}>
+                                  {getStatusText(selectedHousehold)}
+                                </Badge>
                             </div>
                         </div>
                     </InfoWindow>
@@ -73,9 +85,9 @@ export function MapView({ households, apiKey }: MapViewProps) {
                 <Card className="shadow-lg">
                     <CardHeader><CardTitle className="text-sm">Legend</CardTitle></CardHeader>
                     <CardContent className="space-y-2 text-sm">
-                        <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full" style={{backgroundColor: getPinColor('Overdue')}}></div> Overdue</div>
-                        <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full" style={{backgroundColor: getPinColor('Pending')}}></div> Upcoming</div>
-                        <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full" style={{backgroundColor: getPinColor('Completed')}}></div> Up-to-date</div>
+                        <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full" style={{backgroundColor: '#ef4444'}}></div> Overdue</div>
+                        <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full" style={{backgroundColor: '#facc15'}}></div> Upcoming</div>
+                        <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full" style={{backgroundColor: '#22c55e'}}></div> Up-to-date</div>
                     </CardContent>
                 </Card>
             </div>
