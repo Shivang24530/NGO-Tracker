@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray } from 'react-hook-form';
 import * as z from 'zod';
@@ -35,11 +35,13 @@ import {
 } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
 import { MapPin, Camera, Trash2, PlusCircle, Loader2, Users, Home, Phone, ArrowRight, Upload } from 'lucide-react';
-import placeholderImages from '@/lib/placeholder-images.json';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { cn } from '@/lib/utils';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import type { FollowUpVisit } from '@/lib/types';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from './ui/dialog';
+import { Alert, AlertTitle, AlertDescription } from './ui/alert';
+
 
 const childSchema = z.object({
   name: z.string().min(2, 'Name is too short'),
@@ -112,9 +114,14 @@ export function RegisterHouseholdForm() {
   const { user } = useUser();
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isProcessing, setIsProcessing] = useState<'family' | 'house' | 'family-upload' | 'house-upload' | null>(null);
   const [initialCenter, setInitialCenter] = useState<{lat: number, lng: number} | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
+
+  const [hasCameraPermission, setHasCameraPermission] = useState(true);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const familyPhotoInputRef = useRef<HTMLInputElement>(null);
+  const housePhotoInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -139,6 +146,36 @@ export function RegisterHouseholdForm() {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   useEffect(() => {
+    if (step === 3) { // Only request camera when on the photo step
+        const getCameraPermission = async () => {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                setHasCameraPermission(false);
+                return;
+            }
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                setHasCameraPermission(true);
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                }
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                setHasCameraPermission(false);
+            }
+        };
+        getCameraPermission();
+        
+        return () => { // Cleanup: stop video stream when component unmounts or step changes
+            if (videoRef.current && videoRef.current.srcObject) {
+                const stream = videoRef.current.srcObject as MediaStream;
+                stream.getTracks().forEach(track => track.stop());
+            }
+        };
+    }
+  }, [step]);
+
+
+  useEffect(() => {
     if (!apiKey) {
       setMapError("Google Maps API key is missing. Please add it to your .env file.");
       return;
@@ -154,12 +191,10 @@ export function RegisterHouseholdForm() {
         },
         (error) => {
           console.warn("Could not get user location, defaulting.", error);
-          // Default to a central location if permission is denied
           setInitialCenter({ lat: 28.7041, lng: 77.1025 });
         }
       );
     } else {
-        // Geolocation not supported, default
         setInitialCenter({ lat: 28.7041, lng: 77.1025 });
     }
   }, [apiKey, setValue]);
@@ -173,7 +208,6 @@ export function RegisterHouseholdForm() {
       if (step < steps.length) {
         setStep((s) => s + 1);
       } else {
-        // Final step, trigger submission
         await form.handleSubmit(onSubmit)();
       }
     } else {
@@ -192,43 +226,41 @@ export function RegisterHouseholdForm() {
     setValue('longitude', lng, { shouldValidate: true });
   };
   
-  const handleCapturePhoto = (type: 'family' | 'house') => {
-    setIsProcessing(type);
-    // Simulate Capacitor Camera API call
-    setTimeout(() => {
-        const photoUrl = type === 'family' 
-          ? placeholderImages.placeholderImages.find(p => p.id === "family-photo-1")?.imageUrl 
-          : placeholderImages.placeholderImages.find(p => p.id === "house-photo-1")?.imageUrl
-        if (photoUrl) {
-            setValue(type === 'family' ? 'familyPhotoUrl' : 'housePhotoUrl', photoUrl, { shouldValidate: true });
-        }
-        setIsProcessing(null);
-        toast({
-            title: 'Photo Captured',
-            description: `The ${type} photo has been saved.`,
-        });
-    }, 1500);
+  const handleSnapPhoto = (type: 'family' | 'house') => {
+      if (videoRef.current && canvasRef.current) {
+          const video = videoRef.current;
+          const canvas = canvasRef.current;
+          const context = canvas.getContext('2d');
+          
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          context?.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+          
+          const dataUrl = canvas.toDataURL('image/jpeg');
+          setValue(type === 'family' ? 'familyPhotoUrl' : 'housePhotoUrl', dataUrl, { shouldValidate: true });
+          
+          toast({
+              title: 'Photo Captured',
+              description: `The ${type} photo has been saved.`,
+          });
+      }
   };
 
-  const handleUploadPhoto = (type: 'family' | 'house') => {
-    const processType = type === 'family' ? 'family-upload' : 'house-upload';
-    setIsProcessing(processType);
-    // Simulate file selection and upload
-    setTimeout(() => {
-      // Using different seeds for uploaded photos
-      const photoUrl = type === 'family' 
-          ? 'https://picsum.photos/seed/family-upload/600/400' 
-          : 'https://picsum.photos/seed/house-upload/600/400';
-      
-      setValue(type === 'family' ? 'familyPhotoUrl' : 'housePhotoUrl', photoUrl, { shouldValidate: true });
-      setIsProcessing(null);
-      toast({
-          title: 'Photo Uploaded',
-          description: `A new ${type} photo has been uploaded.`,
-      });
-    }, 1500);
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, type: 'family' | 'house') => {
+    const file = event.target.files?.[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const dataUrl = e.target?.result as string;
+            setValue(type === 'family' ? 'familyPhotoUrl' : 'housePhotoUrl', dataUrl, { shouldValidate: true });
+            toast({
+              title: 'Photo Uploaded',
+              description: `A new ${type} photo has been uploaded.`,
+          });
+        };
+        reader.readAsDataURL(file);
+    }
   };
-
 
   async function onSubmit(values: FormData) {
     setIsSubmitting(true);
@@ -317,6 +349,39 @@ export function RegisterHouseholdForm() {
         setIsSubmitting(false);
     }
   }
+
+  const CameraDialog = ({ type }: { type: 'family' | 'house' }) => (
+    <Dialog>
+        <DialogTrigger asChild>
+            <Button type="button" variant="outline" className="flex-grow" disabled={!hasCameraPermission}>
+                <Camera className="mr-2 h-4 w-4" /> Take Photo
+            </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-2xl">
+            <DialogHeader>
+                <DialogTitle>Take {type === 'family' ? 'Family' : 'House'} Photo</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+                <div className="bg-black rounded-md overflow-hidden aspect-video flex items-center justify-center">
+                    <video ref={videoRef} className="w-full h-auto" autoPlay muted playsInline />
+                </div>
+                {!hasCameraPermission && (
+                    <Alert variant="destructive">
+                        <AlertTitle>Camera Access Denied</AlertTitle>
+                        <AlertDescription>
+                            Please enable camera permissions in your browser settings to use this feature.
+                        </AlertDescription>
+                    </Alert>
+                )}
+                <DialogClose asChild>
+                    <Button onClick={() => handleSnapPhoto(type)} disabled={!hasCameraPermission}>
+                        <Camera className="mr-2 h-4 w-4" /> Snap Photo
+                    </Button>
+                </DialogClose>
+            </div>
+        </DialogContent>
+    </Dialog>
+  );
 
   const renderStepContent = () => {
     switch (step) {
@@ -422,6 +487,10 @@ export function RegisterHouseholdForm() {
         );
       case 3:
         return (
+            <>
+            <canvas ref={canvasRef} className="hidden" />
+            <input type="file" accept="image/*" ref={familyPhotoInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'family')} />
+            <input type="file" accept="image/*" ref={housePhotoInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'house')} />
             <div className="grid md:grid-cols-2 gap-8">
               <div className="space-y-4">
                 <FormLabel>Family Photo</FormLabel>
@@ -429,13 +498,9 @@ export function RegisterHouseholdForm() {
                   {familyPhotoUrl ? <Image src={familyPhotoUrl} alt="Family" width={600} height={400} className="w-full h-full object-cover" data-ai-hint="family portrait"/> : <span>No photo</span>}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" className="flex-grow" onClick={() => handleCapturePhoto('family')} disabled={!!isProcessing}>
-                        {isProcessing === 'family' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-                        {isProcessing === 'family' ? 'Capturing...' : 'Take Photo'}
-                    </Button>
-                    <Button type="button" variant="outline" className="flex-grow" onClick={() => handleUploadPhoto('family')} disabled={!!isProcessing}>
-                        {isProcessing === 'family-upload' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                        {isProcessing === 'family-upload' ? 'Uploading...' : 'Upload Photo'}
+                    <CameraDialog type="family" />
+                    <Button type="button" variant="outline" className="flex-grow" onClick={() => familyPhotoInputRef.current?.click()}>
+                        <Upload className="mr-2 h-4 w-4" /> Upload Photo
                     </Button>
                 </div>
               </div>
@@ -445,17 +510,14 @@ export function RegisterHouseholdForm() {
                     {housePhotoUrl ? <Image src={housePhotoUrl} alt="House" width={600} height={400} className="w-full h-full object-cover" data-ai-hint="modest house" /> : <span>No photo</span>}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" className="flex-grow" onClick={() => handleCapturePhoto('house')} disabled={!!isProcessing}>
-                        {isProcessing === 'house' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-                        {isProcessing === 'house' ? 'Capturing...' : 'Take Photo'}
-                    </Button>
-                     <Button type="button" variant="outline" className="flex-grow" onClick={() => handleUploadPhoto('house')} disabled={!!isProcessing}>
-                        {isProcessing === 'house-upload' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                        {isProcessing === 'house-upload' ? 'Uploading...' : 'Upload Photo'}
+                    <CameraDialog type="house" />
+                    <Button type="button" variant="outline" className="flex-grow" onClick={() => housePhotoInputRef.current?.click()}>
+                        <Upload className="mr-2 h-4 w-4" /> Upload Photo
                     </Button>
                 </div>
               </div>
             </div>
+            </>
         );
       default:
         return null;
