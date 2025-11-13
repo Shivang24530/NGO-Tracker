@@ -13,115 +13,40 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, ArrowLeft } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import { useDoc, useFirestore, useUser, useMemoFirebase } from '@/firebase';
 import type { Household } from '@/lib/types';
-import { collection, query, orderBy, limit, startAfter, endBefore, limitToLast, getDocs, Query, DocumentData } from 'firebase/firestore';
-import { useState, useEffect } from 'react';
+import { doc } from 'firebase/firestore';
 
 export default function AllHouseholdsPage() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
-  const [lastVisible, setLastVisible] = useState<any | null>(null);
-  const [firstVisible, setFirstVisible] = useState<any | null>(null);
-  const [page, setPage] = useState(1);
-  const [households, setHouseholds] = useState<Household[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isPaginating, setIsPaginating] = useState(false);
-  const [hasNextPage, setHasNextPage] = useState(false);
 
-  const pageSize = 20;
-
-  const buildQuery = (direction?: 'next' | 'prev'): Query<DocumentData> | null => {
-    if (!user) return null;
-    
-    const baseCollection = collection(firestore, 'households');
-    let q = query(baseCollection, orderBy('familyName'), limit(pageSize));
-
-    if (direction === 'next' && lastVisible) {
-      q = query(baseCollection, orderBy('familyName'), startAfter(lastVisible), limit(pageSize));
-    } else if (direction === 'prev' && firstVisible) {
-      q = query(baseCollection, orderBy('familyName'), endBefore(firstVisible), limitToLast(pageSize));
-    }
-
-    return q;
-  };
+  const householdRef = useMemoFirebase(
+    () => (user?.uid ? doc(firestore, 'households', user.uid) : null),
+    [firestore, user]
+  );
   
-  const fetchHouseholds = async (direction?: 'next' | 'prev') => {
-    if (!user) return;
-    const paginating = direction === 'next' || direction === 'prev';
-    if(paginating) setIsPaginating(true);
-    else setIsLoading(true);
+  const { data: household, isLoading } = useDoc<Household>(householdRef);
 
-    const q = buildQuery(direction);
-    if (!q) {
-       if(paginating) setIsPaginating(false);
-       else setIsLoading(false);
-      return;
-    };
-
-    try {
-      const documentSnapshots = await getDocs(q);
-      const fetchedHouseholds = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() } as Household));
-      
-      // We only want the household that matches the user's ID
-      const userHousehold = fetchedHouseholds.filter(h => h.id === user.uid);
-      
-      setHouseholds(userHousehold);
-      setHasNextPage(fetchedHouseholds.length === pageSize);
-
-      if (documentSnapshots.docs.length > 0) {
-        setFirstVisible(documentSnapshots.docs[0]);
-        setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
-      }
-    } catch (error) {
-      console.error("Error fetching households:", error);
-    } finally {
-      if(paginating) setIsPaginating(false);
-      else setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (user) {
-      fetchHouseholds();
-    } else if (!isUserLoading) {
-      setIsLoading(false);
-    }
-  }, [user, isUserLoading]);
-
-  const handleNext = () => {
-    if (hasNextPage) {
-      setPage(page + 1);
-      fetchHouseholds('next');
-    }
-  };
-
-  const handlePrevious = () => {
-    if (page > 1) {
-      setPage(page - 1);
-      fetchHouseholds('prev');
-    }
-  };
-
-  const finalIsLoading = isLoading || isPaginating;
+  const households = household ? [household] : [];
+  const finalIsLoading = isUserLoading || isLoading;
 
   return (
     <div className="flex min-h-screen w-full flex-col">
-      <PageHeader title="All Families" />
+      <PageHeader title="My Family" />
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
         <Card>
           <CardHeader>
-            <CardTitle>Family Directory</CardTitle>
+            <CardTitle>My Family Directory</CardTitle>
             <CardDescription>
-              A complete list of all families registered in the program.
+              This is the family registered under your account.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -139,18 +64,18 @@ export default function AllHouseholdsPage() {
                 {finalIsLoading && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center">
-                      Loading families...
+                      Loading family information...
                     </TableCell>
                   </TableRow>
                 )}
-                {!finalIsLoading && households?.length === 0 && (
+                {!finalIsLoading && households.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center">
-                      No families registered yet.
+                      No family registered for this account.
                     </TableCell>
                   </TableRow>
                 )}
-                {households?.map((household) => (
+                {households.map((household) => (
                   <TableRow key={household.id}>
                     <TableCell className="font-medium">{household.familyName}</TableCell>
                     <TableCell>{household.locationArea}</TableCell>
@@ -175,17 +100,6 @@ export default function AllHouseholdsPage() {
               </TableBody>
             </Table>
           </CardContent>
-          <CardFooter className="flex justify-between">
-            <Button onClick={handlePrevious} disabled={page <= 1 || finalIsLoading}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Previous
-            </Button>
-            <span className="text-sm text-muted-foreground">Page {page}</span>
-            <Button onClick={handleNext} disabled={!hasNextPage || finalIsLoading}>
-              Next
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </CardFooter>
         </Card>
       </main>
     </div>
