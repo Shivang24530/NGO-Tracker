@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray } from 'react-hook-form';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
-import { doc, writeBatch, collection, getDocs, query } from 'firebase/firestore';
+import { doc, writeBatch, collection, getDocs, query, deleteDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 
 import { Button } from '@/components/ui/button';
@@ -79,7 +79,6 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
   const router = useRouter();
   const firestore = useFirestore();
   const [isLocating, setIsLocating] = useState(false);
-  const [childrenToDelete, setChildrenToDelete] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<FormData>({
@@ -132,12 +131,44 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
     }
   };
 
-  const markChildForDeletion = (index: number) => {
-    const child = fields[index];
-    if (child.id) {
-        setChildrenToDelete(prev => [...prev, child.id!]);
+  const handleDeleteChild = async (index: number) => {
+    const childToDelete = fields[index];
+    
+    // If child is not saved in DB yet, just remove from form
+    if (!childToDelete.id) {
+        remove(index);
+        return;
     }
-    remove(index);
+
+    try {
+        const childRef = doc(firestore, 'households', household.id, 'children', childToDelete.id);
+        
+        // Batch delete child and their progress updates
+        const batch = writeBatch(firestore);
+
+        const progressUpdatesQuery = query(collection(childRef, 'childProgressUpdates'));
+        const progressUpdatesSnapshot = await getDocs(progressUpdatesQuery);
+        progressUpdatesSnapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+
+        batch.delete(childRef);
+
+        await batch.commit();
+
+        remove(index); // Remove from UI after successful DB deletion
+        toast({
+            title: 'Child Deleted',
+            description: `${childToDelete.name} has been removed from the family.`,
+        });
+    } catch (error) {
+        console.error("Error deleting child:", error);
+        toast({
+            variant: "destructive",
+            title: "Deletion Failed",
+            description: "An error occurred while deleting the child. Please try again.",
+        });
+    }
   }
 
   async function onSubmit(values: FormData) {
@@ -180,21 +211,6 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
             }
         });
         
-        // 3. Handle children deletions
-        for (const childId of childrenToDelete) {
-            const childRef = doc(childrenCollectionRef, childId);
-
-            // Important: Delete subcollections first (e.g., childProgressUpdates)
-            const progressUpdatesQuery = query(collection(childRef, 'childProgressUpdates'));
-            const progressUpdatesSnapshot = await getDocs(progressUpdatesQuery);
-            progressUpdatesSnapshot.forEach(doc => {
-                batch.delete(doc.ref);
-            });
-
-            // Then delete the child document itself
-            batch.delete(childRef);
-        }
-
         await batch.commit();
 
         toast({
@@ -283,7 +299,7 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => markChildForDeletion(index)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                            <AlertDialogAction onClick={() => handleDeleteChild(index)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
                         </AlertDialogFooter>
                      </AlertDialogContent>
                  </AlertDialog>
@@ -316,3 +332,5 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
     </Form>
   );
 }
+
+    
