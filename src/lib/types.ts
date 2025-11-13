@@ -39,6 +39,7 @@ export type FollowUpVisit = {
   childProgressUpdates?: ChildProgressUpdate[];
 };
 
+// Note: `is_working`, `work_details` are snake_case to match AI model output
 export type ChildProgressUpdate = {
   id: string;
   child_id: string;
@@ -49,3 +50,5 @@ export type ChildProgressUpdate = {
   work_details?: string;
   studying_challenges?: string;
 };
+
+    
