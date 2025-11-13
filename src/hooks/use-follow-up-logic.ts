@@ -26,10 +26,13 @@ import {
   getYear,
   formatISO,
 } from 'date-fns';
+import { useIsMounted } from '@/hooks/use-is-mounted';
+
 
 export function useFollowUpLogic(year: number) {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
+  const isMounted = useIsMounted();
 
   const householdsQuery = useMemoFirebase(
     () => (firestore ? query(collection(firestore, 'households')) : null),
@@ -45,22 +48,24 @@ export function useFollowUpLogic(year: number) {
   const [isInitializing, setIsInitializing] = useState(false);
 
   useEffect(() => {
-    if (firestore && households && !householdsLoading) {
-        const fetchChildAndVisitData = async () => {
-            setChildrenLoading(true);
-            setVisitsLoading(true);
+    const fetchChildAndVisitData = async () => {
+        if (!firestore || !households || !isMounted) return;
 
-            const childrenPromises = households.map(h => 
-                getDocs(collection(firestore, 'households', h.id, 'children'))
-            );
-            const visitsPromises = households.map(h => 
-                getDocs(query(
-                    collection(firestore, 'households', h.id, 'followUpVisits'),
-                    where('visitDate', '>=', startOfYear(new Date(year, 0, 1)).toISOString()),
-                    where('visitDate', '<=', endOfYear(new Date(year, 11, 31)).toISOString())
-                ))
-            );
+        setChildrenLoading(true);
+        setVisitsLoading(true);
 
+        const childrenPromises = households.map(h => 
+            getDocs(collection(firestore, 'households', h.id, 'children'))
+        );
+        const visitsPromises = households.map(h => 
+            getDocs(query(
+                collection(firestore, 'households', h.id, 'followUpVisits'),
+                where('visitDate', '>=', startOfYear(new Date(year, 0, 1)).toISOString()),
+                where('visitDate', '<=', endOfYear(new Date(year, 11, 31)).toISOString())
+            ))
+        );
+
+        try {
             const [childrenSnapshots, visitsSnapshots] = await Promise.all([
                 Promise.all(childrenPromises),
                 Promise.all(visitsPromises)
@@ -75,13 +80,17 @@ export function useFollowUpLogic(year: number) {
 
             setAllChildren(childrenData);
             setAllVisits(visitsData);
+        } catch (error) {
+            console.error("Error fetching child and visit data:", error);
+        } finally {
             setChildrenLoading(false);
             setVisitsLoading(false);
-        };
-        
-        fetchChildAndVisitData();
-    }
-  }, [firestore, households, year, householdsLoading]);
+        }
+    };
+    
+    fetchChildAndVisitData();
+
+  }, [firestore, households, year, isMounted]);
 
   useEffect(() => {
     const initializeVisitsForHousehold = async (h: Household) => {
