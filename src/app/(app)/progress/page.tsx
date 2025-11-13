@@ -39,21 +39,38 @@ export default function ProgressTrackingPage() {
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
   useEffect(() => {
-    if (firestore && households) {
-      const fetchAllChildren = async () => {
-        setChildrenLoading(true);
-        const childrenPromises = households.map(h => 
-          getDocs(collection(firestore, 'households', h.id, 'children'))
-        );
+    // Wait until firestore is available and the initial households load is complete.
+    if (!firestore || households === null) {
+      setChildrenLoading(true);
+      return;
+    }
+
+    // If households has loaded but is an empty array, there's nothing to fetch.
+    if (households.length === 0) {
+      setAllChildren([]);
+      setChildrenLoading(false);
+      return;
+    }
+
+    const fetchAllChildren = async () => {
+      setChildrenLoading(true);
+      const childrenPromises = households.map(h => 
+        getDocs(collection(firestore, 'households', h.id, 'children'))
+      );
+      try {
         const childrenSnapshots = await Promise.all(childrenPromises);
         const childrenData = childrenSnapshots.flatMap(snap => 
           snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Child))
         );
         setAllChildren(childrenData);
+      } catch (error) {
+        console.error("Error fetching children data:", error);
+      } finally {
         setChildrenLoading(false);
-      };
-      fetchAllChildren();
-    }
+      }
+    };
+    
+    fetchAllChildren();
   }, [firestore, households]);
   
   useEffect(() => {
