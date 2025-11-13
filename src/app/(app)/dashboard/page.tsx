@@ -17,10 +17,10 @@ import { collection, query, where, limit } from 'firebase/firestore';
 
 export default function Dashboard() {
   const firestore = useFirestore();
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
 
   const householdsQuery = useMemoFirebase(
-    () => (user?.uid ? query(collection(firestore, 'households')) : null),
+    () => (user?.uid ? query(collection(firestore, 'households'), where('id', '==', user.uid)) : null),
     [firestore, user]
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
@@ -38,7 +38,7 @@ export default function Dashboard() {
   const { data: followUpVisits, isLoading: visitsLoading } = useCollection<FollowUpVisit>(visitsQuery);
 
   const recentRegistrationsQuery = useMemoFirebase(
-    () => (user?.uid ? query(collection(firestore, 'households'), limit(5)) : null),
+    () => (user?.uid ? query(collection(firestore, 'households'), where('id', '==', user.uid), limit(5)) : null),
     [firestore, user]
   );
   const { data: recentRegistrations, isLoading: recentRegistrationsLoading } = useCollection<Household>(recentRegistrationsQuery);
@@ -59,7 +59,7 @@ export default function Dashboard() {
       { title: 'Visits This Quarter', value: visitsThisQuarter, icon: Clock, color: 'bg-purple-500', progress: 60 },
   ];
 
-  const isLoading = householdsLoading || childrenLoading || visitsLoading || recentRegistrationsLoading;
+  const isLoading = isUserLoading || householdsLoading || childrenLoading || visitsLoading || recentRegistrationsLoading;
 
   return (
     <div className="flex min-h-screen w-full flex-col">

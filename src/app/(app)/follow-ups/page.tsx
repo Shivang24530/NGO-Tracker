@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Clock, CalendarCheck, AlertTriangle } from 'lucide-react';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
 import type { Household, FollowUpVisit } from '@/lib/types';
-import { collection, query, where, collectionGroup } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 
 const VisitCard = ({ visit, household }: { visit: FollowUpVisit, household: Household | undefined }) => {
 
@@ -57,16 +57,16 @@ const VisitCard = ({ visit, household }: { visit: FollowUpVisit, household: Hous
 
 export default function FollowUpsPage() {
   const firestore = useFirestore();
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
 
   const visitsQuery = useMemoFirebase(
-    () => (user?.uid ? collectionGroup(firestore, 'followUpVisits') : null),
+    () => (user?.uid ? query(collection(firestore, 'households', user.uid, 'followUpVisits')) : null),
     [firestore, user]
   );
   const { data: followUpVisits, isLoading: visitsLoading } = useCollection<FollowUpVisit>(visitsQuery);
   
   const householdsQuery = useMemoFirebase(
-    () => (user?.uid ? collection(firestore, 'households') : null),
+    () => (user?.uid ? query(collection(firestore, 'households'), where('id', '==', user.uid)) : null),
     [firestore, user]
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
@@ -76,7 +76,7 @@ export default function FollowUpsPage() {
     (v) => isWithinInterval(new Date(v.visitDate), { start: startOfMonth(new Date()), end: endOfMonth(new Date()) }) && v.status === 'Pending'
   ) ?? [];
 
-  const isLoading = visitsLoading || householdsLoading;
+  const isLoading = isUserLoading || visitsLoading || householdsLoading;
 
   const findHousehold = (householdId: string) => households?.find(h => h.id === householdId);
 
