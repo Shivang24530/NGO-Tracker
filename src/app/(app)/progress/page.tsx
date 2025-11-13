@@ -65,6 +65,7 @@ export default function ProgressTrackingPage() {
         setAllChildren(childrenData);
       } catch (error) {
         console.error("Error fetching children data:", error);
+        setAllChildren([]); // Clear on error
       } finally {
         setChildrenLoading(false);
       }
