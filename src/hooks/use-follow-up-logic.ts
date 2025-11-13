@@ -6,7 +6,6 @@ import {
   useFirestore,
   useUser,
   useCollection,
-  useDoc,
   useMemoFirebase,
 } from '@/firebase';
 import {
@@ -170,7 +169,7 @@ export function useFollowUpLogic(year: number) {
         status = 'Partially Completed';
       }
       
-      const visit = households.length > 0 ? visitsForQuarter.find(v => v.householdId === households[0].id) : undefined;
+      const visit = households.length > 0 ? visitsForQuarter.find(v => v.householdId === households[0]?.id) : undefined;
       
       return {
         id: qNum,
@@ -188,8 +187,5 @@ export function useFollowUpLogic(year: number) {
 
   const isLoading = isUserLoading || householdsLoading || visitsLoading || isInitializing;
 
-  // Returning a single household for display simplicity in some components
-  const household = households ? households[0] : null;
-
-  return { quarters, household, households, children, visits, isLoading };
+  return { quarters, households, children, visits, isLoading };
 }

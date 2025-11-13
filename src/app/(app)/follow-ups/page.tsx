@@ -18,8 +18,11 @@ import {
   AlertCircle,
   Users,
   TrendingUp,
+  Loader2,
 } from 'lucide-react';
 import { useFollowUpLogic } from '@/hooks/use-follow-up-logic';
+import { useFirestore } from '@/firebase';
+
 
 const StatCard = ({ title, value, icon: Icon, color, isLoading }: { title: string; value: number | string, icon: React.ElementType, color: string, isLoading: boolean }) => (
     <Card>
@@ -35,8 +38,8 @@ const StatCard = ({ title, value, icon: Icon, color, isLoading }: { title: strin
     </Card>
 );
 
-export default function FollowUpsPage() {
-  const { household, visits, isLoading } = useFollowUpLogic(new Date().getFullYear());
+function FollowUpsContent() {
+  const { households, visits, isLoading } = useFollowUpLogic(new Date().getFullYear());
 
   const now = new Date();
   
@@ -59,17 +62,18 @@ export default function FollowUpsPage() {
   const recentVisits = 
     completed.sort((a, b) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime()).slice(0, 5) ?? [];
 
-  const totalFamilies = household ? 1 : 0;
-  const householdName = household?.familyName;
+  const totalFamilies = households?.length ?? 0;
+
+  const getHouseholdName = (householdId: string) => {
+    return households?.find(h => h.id === householdId)?.familyName || 'Unknown Family';
+  };
+  const getHouseholdLocation = (householdId: string) => {
+    return households?.find(h => h.id === householdId)?.locationArea || '';
+  };
+
 
   return (
-    <div className="flex min-h-screen w-full flex-col">
-      <PageHeader title="Follow-up Visits">
-        <p className="text-sm text-muted-foreground hidden md:block">
-           Track and manage quarterly visits to registered families
-        </p>
-      </PageHeader>
-      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+    <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <StatCard title="Overdue Visits" value={overdue.length} icon={AlertCircle} color="red" isLoading={isLoading} />
             <StatCard title="Upcoming Visits" value={upcoming.length} icon={Clock} color="orange" isLoading={isLoading} />
@@ -89,10 +93,10 @@ export default function FollowUpsPage() {
                             return (
                                 <Link href={`/households/${visit.householdId}/follow-ups/${visit.id}/conduct`} key={visit.id} className="block border p-4 rounded-lg hover:bg-secondary">
                                     <div className="flex justify-between items-center">
-                                        <p className="font-semibold">{householdName}</p>
+                                        <p className="font-semibold">{getHouseholdName(visit.householdId)}</p>
                                         <p className="text-sm text-muted-foreground">{new Date(visit.visitDate).toLocaleDateString()}</p>
                                     </div>
-                                    <p className="text-sm text-muted-foreground">{household?.locationArea}</p>
+                                    <p className="text-sm text-muted-foreground">{getHouseholdLocation(visit.householdId)}</p>
                                 </Link>
                             )
                         })}
@@ -117,10 +121,10 @@ export default function FollowUpsPage() {
                              return (
                                 <Link href={`/households/${visit.householdId}/follow-ups/${visit.id}/conduct`} key={visit.id} className="block border p-4 rounded-lg hover:bg-secondary">
                                     <div className="flex justify-between items-center">
-                                        <p className="font-semibold">{householdName}</p>
+                                        <p className="font-semibold">{getHouseholdName(visit.householdId)}</p>
                                         <p className="text-sm text-muted-foreground">{new Date(visit.visitDate).toLocaleDateString()}</p>
                                     </div>
-                                     <p className="text-sm text-muted-foreground">{household?.locationArea}</p>
+                                     <p className="text-sm text-muted-foreground">{getHouseholdLocation(visit.householdId)}</p>
                                 </Link>
                              )
                         })}
@@ -147,7 +151,7 @@ export default function FollowUpsPage() {
                                 <div key={visit.id} className="border p-4 rounded-lg">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-4">
-                                            <p className="font-semibold">{householdName || 'Unknown Family'}</p>
+                                            <p className="font-semibold">{getHouseholdName(visit.householdId)}</p>
                                             <p className="text-sm text-muted-foreground">by {visit.visitedBy}</p>
                                         </div>
                                         <p className="text-sm text-muted-foreground">{new Date(visit.visitDate).toLocaleDateString()}</p>
@@ -162,8 +166,26 @@ export default function FollowUpsPage() {
                 )}
             </CardContent>
         </Card>
-
       </main>
-    </div>
-  );
+  )
+}
+
+
+export default function FollowUpsPage() {
+    const firestore = useFirestore();
+
+    return (
+        <div className="flex min-h-screen w-full flex-col">
+            <PageHeader title="Follow-up Visits">
+                <p className="text-sm text-muted-foreground hidden md:block">
+                Track and manage quarterly visits to registered families
+                </p>
+            </PageHeader>
+            {firestore ? <FollowUpsContent /> : (
+                 <div className="flex flex-1 items-center justify-center">
+                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                </div>
+            )}
+        </div>
+    )
 }
