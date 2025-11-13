@@ -40,6 +40,7 @@ export default function MapOverviewPage() {
             if (isMounted && households && households.length > 0) {
                 setCenter({ lat: households[0].latitude, lng: households[0].longitude });
             } else if (isMounted) {
+                // A reasonable default if no other location is available
                 setCenter({ lat: 28.7041, lng: 77.1025 });
             }
         };
@@ -92,7 +93,7 @@ export default function MapOverviewPage() {
                         <MapPin className="h-4 w-4" />
                         <AlertTitle>Configuration Error</AlertTitle>
                         <AlertDescription>
-                            Google Maps API key is missing. Please add <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to your <code>.env.local</code> file.
+                            Google Maps API key is missing. Please add <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="YOUR_API_KEY_HERE"</code> to your <code>.env</code> file.
                         </AlertDescription>
                     </Alert>
                 </main>
@@ -109,7 +110,7 @@ export default function MapOverviewPage() {
                         <MapPin className="h-4 w-4" />
                         <AlertTitle>Map Authentication Failed</AlertTitle>
                         <AlertDescription>
-                            <p>The Google Maps API key provided is not working. Please check the following:</p>
+                            <p>The Google Maps API key is not working. Please check the following:</p>
                             <ul className="list-disc pl-5 mt-2 space-y-1">
                                 <li>The API key in your <code>.env</code> file is correct and has no typos.</li>
                                 <li>The "Maps JavaScript API" is enabled in your Google Cloud Console.</li>
@@ -133,8 +134,13 @@ export default function MapOverviewPage() {
             </div>
         ) : (
             <div className='h-full w-full' onMouseOverCapture={(e) => {
-                const target = e.target as HTMLElement;
-                if (target.className.includes('gm-auth-failure-icon')) {
+                const target = e.target as any;
+                // Handle both string class names (HTML) and object class names (SVG)
+                const className = typeof target.className === 'string' 
+                    ? target.className 
+                    : (target.className?.baseVal || '');
+                
+                if (className.includes('gm-auth-failure-icon')) {
                     setAuthFailed(true);
                 }
             }}>
