@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { ProgressAnalysis } from '@/components/genai/progress-analysis';
-import { ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
+import { ArrowUp, ArrowDown, Loader2, Users } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -21,7 +21,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query } from 'firebase/firestore';
 import type { Child, Household } from '@/lib/types';
 import { useEffect, useState } from 'react';
 
@@ -31,30 +31,32 @@ export default function ProgressTrackingPage() {
   const [childrenWithStatus, setChildrenWithStatus] = useState<(Child & { status: 'Improved' | 'Declined' })[]>([]);
 
   const householdsQuery = useMemoFirebase(
-    () => (user?.uid ? query(collection(firestore, 'households'), where('id', '==', user.uid)) : null),
+    () => (user?.uid ? query(collection(firestore, 'households', user.uid)) : null),
     [firestore, user]
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
   const childrenQuery = useMemoFirebase(
-    () => (user?.uid ? collection(firestore, 'households', user.uid, 'children') : null),
+    () => (user?.uid ? query(collection(firestore, `households/${user.uid}/children`)) : null),
     [firestore, user]
   );
   const { data: children, isLoading: childrenLoading } = useCollection<Child>(childrenQuery);
   
   useEffect(() => {
-    if (!isUserLoading && children) {
+    if (children) {
+      // This is placeholder logic to simulate progress status
       const childrenWithRandomStatus = children.map(child => ({
         ...child,
         status: Math.random() > 0.5 ? 'Improved' : 'Declined' as 'Improved' | 'Declined',
       }));
       setChildrenWithStatus(childrenWithRandomStatus);
     }
-  }, [children, isUserLoading]); 
+  }, [children]); 
 
 
   const isLoading = isUserLoading || householdsLoading || childrenLoading;
 
+  const totalChildren = children?.length ?? 0;
   const improvedCount = childrenWithStatus.filter(c => c.status === 'Improved').length;
   const declinedCount = childrenWithStatus.filter(c => c.status === 'Declined').length;
   
@@ -67,7 +69,19 @@ export default function ProgressTrackingPage() {
     <div className="flex min-h-screen w-full flex-col">
       <PageHeader title="Progress Tracking" />
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardDescription>Total Children</CardDescription>
+                    <CardTitle className="text-4xl text-blue-600">{isLoading ? '...' : totalChildren}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-xs text-muted-foreground flex items-center">
+                        <Users className="h-4 w-4 mr-1 text-blue-600" />
+                        All registered children
+                    </div>
+                </CardContent>
+            </Card>
             <Card>
                 <CardHeader className="pb-2">
                     <CardDescription>Improved (Back to School)</CardDescription>
