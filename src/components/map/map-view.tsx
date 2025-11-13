@@ -8,14 +8,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { isPast } from 'date-fns';
 
+type LatLng = {
+  lat: number;
+  lng: number;
+};
+
 type HouseholdWithVisit = Household & { visitStatus?: FollowUpVisit['status'] };
 
 interface MapViewProps {
   households: HouseholdWithVisit[];
   apiKey: string;
+  center: LatLng | null;
 }
 
-export function MapView({ households, apiKey }: MapViewProps) {
+export function MapView({ households, apiKey, center }: MapViewProps) {
   const [selectedHousehold, setSelectedHousehold] = useState<HouseholdWithVisit | null>(null);
 
   const getPinColor = (household: HouseholdWithVisit) => {
@@ -42,9 +48,10 @@ export function MapView({ households, apiKey }: MapViewProps) {
     <APIProvider apiKey={apiKey}>
         <div className="relative h-full w-full">
             <Map
+                key={center ? `${center.lat}-${center.lng}` : 'default'} // Re-render map when center changes
                 style={{ width: '100%', height: '100%' }}
-                defaultCenter={{ lat: 28.7041, lng: 77.1025 }}
-                defaultZoom={12}
+                defaultCenter={center || { lat: 28.7041, lng: 77.1025 }}
+                defaultZoom={13}
                 gestureHandling={'greedy'}
                 disableDefaultUI={true}
                 mapId={'f5d968a3556f272b'}

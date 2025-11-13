@@ -8,12 +8,18 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { MapPin, Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+
+type LatLng = {
+  lat: number;
+  lng: number;
+};
 
 export default function MapOverviewPage() {
     const firestore = useFirestore();
     const { user, isUserLoading } = useUser();
     const [authFailed, setAuthFailed] = useState(false);
+    const [center, setCenter] = useState<LatLng | null>(null);
 
     const householdsQuery = useMemoFirebase(
       () => (user?.uid ? query(collection(firestore, 'households'), where('id', '==', user.uid)) : null),
@@ -26,6 +32,29 @@ export default function MapOverviewPage() {
         [firestore, user]
     );
     const { data: followUpVisits, isLoading: visitsLoading } = useCollection<FollowUpVisit>(visitsQuery);
+
+    useEffect(() => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    setCenter({ lat: position.coords.latitude, lng: position.coords.longitude });
+                },
+                () => {
+                    // Could not get user location, will fall back to household location
+                    if (households && households.length > 0) {
+                        setCenter({ lat: households[0].latitude, lng: households[0].longitude });
+                    } else {
+                        // Fallback to default if no household either
+                        setCenter({ lat: 28.7041, lng: 77.1025 });
+                    }
+                }
+            );
+        } else if (households && households.length > 0) {
+            setCenter({ lat: households[0].latitude, lng: households[0].longitude });
+        } else {
+            setCenter({ lat: 28.7041, lng: 77.1025 });
+        }
+    }, [households]);
 
     const householdsWithVisits = useMemo(() => {
         if (!households || !followUpVisits) return [];
@@ -42,7 +71,7 @@ export default function MapOverviewPage() {
 
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     
-    const isLoading = isUserLoading || householdsLoading || visitsLoading;
+    const isLoading = isUserLoading || householdsLoading || visitsLoading || !center;
 
     if (!apiKey) {
         return (
@@ -99,7 +128,7 @@ export default function MapOverviewPage() {
                     setAuthFailed(true);
                 }
             }}>
-                <MapView households={householdsWithVisits || []} apiKey={apiKey} />
+                <MapView households={householdsWithVisits || []} apiKey={apiKey} center={center} />
             </div>
         )}
       </main>
