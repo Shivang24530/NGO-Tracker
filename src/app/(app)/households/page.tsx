@@ -20,9 +20,9 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, Pen, Trash2, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useUser, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import type { Household } from '@/lib/types';
-import { doc, deleteDoc, getDocs, collection, writeBatch, query } from 'firebase/firestore';
+import { doc, getDocs, collection, writeBatch, query } from 'firebase/firestore';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,41 +57,48 @@ export default function AllHouseholdsPage() {
 
   const finalIsLoading = isUserLoading || isLoading;
 
-  const handleDelete = async (householdId: string) => {
-    try {
-        const householdDocRef = doc(firestore, 'households', householdId);
+  const handleDelete = async (householdId: string, familyName: string) => {
+    if (!firestore) return;
 
-        // This is a simplified deletion. In a real app with many sub-collections,
-        // you'd need a Cloud Function for recursive deletion to avoid leaving orphaned data.
-        // For this app's structure, we'll delete the main sub-collections manually.
+    const householdDocRef = doc(firestore, 'households', householdId);
 
-        const batch = writeBatch(firestore);
+    const batch = writeBatch(firestore);
 
-        const childrenSnapshot = await getDocs(collection(householdDocRef, 'children'));
-        childrenSnapshot.forEach(doc => batch.delete(doc.ref));
+    // This is a simplified deletion. In a real app with many sub-collections,
+    // you'd need a Cloud Function for recursive deletion to avoid leaving orphaned data.
+    const childrenSnapshot = await getDocs(collection(householdDocRef, 'children'));
+    childrenSnapshot.forEach(doc => batch.delete(doc.ref));
 
-        const visitsSnapshot = await getDocs(collection(householdDocRef, 'followUpVisits'));
-        visitsSnapshot.forEach(doc => batch.delete(doc.ref));
+    const visitsSnapshot = await getDocs(collection(householdDocRef, 'followUpVisits'));
+    visitsSnapshot.forEach(doc => batch.delete(doc.ref));
 
-        // Delete the household document itself
-        batch.delete(householdDocRef);
+    // Delete the household document itself
+    batch.delete(householdDocRef);
 
-        await batch.commit();
-
+    batch.commit()
+      .then(() => {
         toast({
             title: 'Family Deleted',
-            description: 'The family and all associated data have been removed.',
+            description: `The ${familyName} family and all associated data have been removed.`,
         });
         router.refresh();
-
-    } catch (error) {
+      })
+      .catch((error) => {
         console.error("Error deleting household:", error);
+        // Create and emit the detailed permission error
+        const permissionError = new FirestorePermissionError({
+            path: householdDocRef.path,
+            operation: 'delete',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+
+        // Also show a generic toast to the user
         toast({
             variant: "destructive",
             title: 'Deletion Failed',
-            description: 'There was an error deleting the family data.',
+            description: 'There was an error deleting the family data. Check the console for details.',
         });
-    }
+      });
   };
 
 
@@ -186,7 +193,7 @@ export default function AllHouseholdsPage() {
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDelete(household.id)} className="bg-destructive hover:bg-destructive/90">
+                                <AlertDialogAction onClick={() => handleDelete(household.id, household.familyName)} className="bg-destructive hover:bg-destructive/90">
                                   Delete
                                 </AlertDialogAction>
                               </AlertDialogFooter>
