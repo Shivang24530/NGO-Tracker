@@ -9,7 +9,6 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import {
-  isThisMonth,
   isPast,
   isSameDay,
 } from 'date-fns';

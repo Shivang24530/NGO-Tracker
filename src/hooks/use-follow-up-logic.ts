@@ -54,135 +54,74 @@ export function useFollowUpLogic(year: number) {
       ) : null,
       [firestore, user, year]
   );
-  const { data: initialVisits, isLoading: visitsLoading, error: visitsError } = useCollection<FollowUpVisit>(visitsQuery);
+  const { data: visits, isLoading: visitsLoading } = useCollection<FollowUpVisit>(visitsQuery);
   
-  const [visits, setVisits] = useState<FollowUpVisit[]>([]);
   const [logicIsLoading, setLogicIsLoading] = useState(true);
 
   useEffect(() => {
+    // Don't do anything until we know who the user is and if they have a household
     if (isUserLoading || householdLoading) {
       return; 
     }
     
+    // If there is no user or no household, there's nothing to do.
     if (!user || !household) {
       setLogicIsLoading(false);
-      setVisits([]);
       return;
     }
 
-    const manageVisitsForYear = async () => {
-      setLogicIsLoading(true);
-      const visitsColRef = collection(firestore, `households/${user.uid}/followUpVisits`);
-      
-      try {
-        const yearStart = startOfYear(new Date(year, 0, 1));
-        const yearEnd = endOfYear(new Date(year, 11, 31));
+    // If visits are still loading from the hook, wait.
+    if (visitsLoading) {
+        return;
+    }
 
-        const existingVisitsQuery = query(
-            visitsColRef,
-            where('visitDate', '>=', formatISO(yearStart)),
-            where('visitDate', '<=', formatISO(yearEnd))
-        );
-
-        const existingVisitsSnapshot = await getDocs(existingVisitsQuery);
-        const existingVisits = existingVisitsSnapshot.docs.map(
-          (d) => d.data() as FollowUpVisit
-        );
-
-        const batch = writeBatch(firestore);
-        const newVisits: FollowUpVisit[] = [];
-        let batchHasWrites = false;
-
-        for (let qNum = 1; qNum <= 4; qNum++) {
-          const quarterDate = new Date(year, (qNum - 1) * 3, 15);
-          const visitExists = existingVisits.some(
-            (v) => getQuarter(new Date(v.visitDate)) === qNum
-          );
-
-          if (!visitExists) {
-            const newVisitRef = doc(visitsColRef);
-            const newVisitData: FollowUpVisit = {
-              id: newVisitRef.id,
-              householdId: user.uid,
-              visitDate: formatISO(quarterDate),
-              visitType: 'Quarterly',
-              status: 'Pending',
-              visitedBy: '',
-              notes: '',
-              childProgressUpdates: [], // Initialize as empty
-            };
-            batch.set(newVisitRef, newVisitData);
-            newVisits.push(newVisitData);
-            batchHasWrites = true;
-          }
-        }
-
-        if (batchHasWrites) {
-          await batch.commit();
-          // After committing, re-fetch all visits for the year to have a consistent state
-           const allVisitsSnapshot = await getDocs(existingVisitsQuery);
-           const allVisits = allVisitsSnapshot.docs.map(d => d.data() as FollowUpVisit);
-           setVisits(allVisits);
-        } else {
-          setVisits(existingVisits);
-        }
-
-      } catch (error) {
-        console.error("Error managing visits for year:", error);
-      } finally {
-        setLogicIsLoading(false);
-      }
-    };
-    
-    // This effect now combines creation logic with listening to live updates.
-    // When initialVisits from useCollection changes, we re-evaluate.
-    if(initialVisits) {
-        const allCurrentYearVisits = [...initialVisits];
+    const manageVisits = async () => {
+        const visitsColRef = collection(firestore, `households/${user.uid}/followUpVisits`);
+        const existingVisits = visits || [];
         const missingQuarters: number[] = [];
+
         for (let qNum = 1; qNum <= 4; qNum++) {
-            const visitExists = initialVisits.some(v => getQuarter(new Date(v.visitDate)) === qNum && getYear(new Date(v.visitDate)) === year);
+            const visitExists = existingVisits.some(v => getQuarter(new Date(v.visitDate)) === qNum && getYear(new Date(v.visitDate)) === year);
             if (!visitExists) {
                 missingQuarters.push(qNum);
             }
         }
 
-        if(missingQuarters.length > 0) {
-            const createMissingVisits = async () => {
+        if (missingQuarters.length > 0) {
+            try {
                 const batch = writeBatch(firestore);
-                const visitsColRef = collection(firestore, `households/${user.uid}/followUpVisits`);
-                
                 missingQuarters.forEach(qNum => {
-                    const quarterDate = new Date(year, (qNum - 1) * 3, 15);
+                    const quarterDate = new Date(year, (qNum - 1) * 3, 15); // Mid-month of the start of the quarter
                     const newVisitRef = doc(visitsColRef);
                     const newVisitData: FollowUpVisit = {
-                        id: newVisitRef.id, householdId: user.uid,
-                        visitDate: formatISO(quarterDate), visitType: 'Quarterly',
-                        status: 'Pending', visitedBy: '', notes: '', childProgressUpdates: []
+                        id: newVisitRef.id,
+                        householdId: user.uid,
+                        visitDate: formatISO(quarterDate),
+                        visitType: 'Quarterly',
+                        status: 'Pending',
+                        visitedBy: '',
+                        notes: '',
+                        childProgressUpdates: [],
                     };
                     batch.set(newVisitRef, newVisitData);
-                    allCurrentYearVisits.push(newVisitData);
                 });
                 await batch.commit();
-                // No need to set state here, the onSnapshot from useCollection will trigger a re-render with the new data.
-            };
-            createMissingVisits();
+                // The useCollection hook will automatically pick up the new visits,
+                // so no need to set state manually.
+            } catch (error) {
+                console.error("Error creating missing visits:", error);
+            }
         }
-        setVisits(allCurrentYearVisits.sort((a, b) => new Date(a.visitDate).getTime() - new Date(b.visitDate).getTime()));
         setLogicIsLoading(false);
-    } else if (!visitsLoading) {
-        // If initialVisits is null and we are not loading, it means there are no visits yet.
-        // So we should create them.
-        manageVisitsForYear();
-    }
+    };
 
+    manageVisits();
 
-  }, [year, user, household, isUserLoading, householdLoading, firestore, initialVisits, visitsLoading]);
+  }, [year, user, household, isUserLoading, householdLoading, firestore, visits, visitsLoading]);
 
 
   const quarters = useMemo(() => {
-    if (!household) return []; 
-    
-    const now = new Date();
+    if (!household || !visits) return []; 
     
     return [1, 2, 3, 4].map((qNum) => {
       const quarterDate = new Date(year, (qNum - 1) * 3, 1);
