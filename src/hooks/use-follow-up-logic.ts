@@ -32,7 +32,7 @@ import {
 export function useFollowUpLogic(year: number) {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
-  const [dataVersion, setDataVersion] = useState(0); // State to trigger re-fetch
+  const [dataVersion, setDataVersion] = useState(0);
 
   const householdsQuery = useMemoFirebase(
     () => (firestore ? query(collection(firestore, 'households')) : null),
@@ -63,7 +63,7 @@ export function useFollowUpLogic(year: number) {
             )
           )
         : null,
-    [firestore, year, dataVersion] // Add dataVersion to deps
+    [firestore, year, dataVersion]
   );
 
   const {
@@ -88,7 +88,6 @@ export function useFollowUpLogic(year: number) {
 
         const existingVisitsSnapshot = await getDocs(yearQuery);
         if (existingVisitsSnapshot.size >= 4) {
-          // All visits for the year already exist.
           return;
         }
 
@@ -139,14 +138,14 @@ export function useFollowUpLogic(year: number) {
       }
 
       if (didUpdate) {
-        setDataVersion(v => v + 1); // Trigger re-fetch if any visits were created
+        setDataVersion(v => v + 1);
       }
       setIsInitializing(false);
     };
 
     runInitialization();
 
-  }, [households, year, firestore, user, visitsLoading, isInitializing]); // Reruns if households data changes
+  }, [households, year, firestore, user, visitsLoading, isInitializing]);
 
   const quarters = useMemo(() => {
     if (!visits || !households) return [];
@@ -171,8 +170,6 @@ export function useFollowUpLogic(year: number) {
         status = 'Partially Completed';
       }
       
-      // Find the specific visit for the first household for navigation purposes.
-      // This is a simplification; a multi-household app might need a different approach.
       const visit = households.length > 0 ? visitsForQuarter.find(v => v.householdId === households[0].id) : undefined;
       
       return {
@@ -183,17 +180,16 @@ export function useFollowUpLogic(year: number) {
         status,
         completed: completedCount,
         total: totalCount,
-        visits: visitsForQuarter, // All visits in this quarter for all households
-        visit: visit, // A representative visit for actions
+        visits: visitsForQuarter,
+        visit: visit,
       };
     });
   }, [year, visits, households]);
 
   const isLoading = isUserLoading || householdsLoading || visitsLoading || isInitializing;
 
-  // Simplified for now, just returning the first household for display purposes
+  // Returning a single household for display simplicity in some components
   const household = households ? households[0] : null;
 
-  // Returning households and children for broader use in components
   return { quarters, household, households, children, visits, isLoading };
 }
