@@ -21,7 +21,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, doc, query, collectionGroup } from 'firebase/firestore';
+import { collection, doc, query, collectionGroup, getDocs } from 'firebase/firestore';
 import type { Child, Household } from '@/lib/types';
 import { useEffect, useState, useMemo } from 'react';
 
@@ -29,34 +29,48 @@ export default function ProgressTrackingPage() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
   const [childrenWithStatus, setChildrenWithStatus] = useState<(Child & { status: 'Improved' | 'Declined' })[]>([]);
+  const [allChildren, setAllChildren] = useState<Child[]>([]);
+  const [childrenLoading, setChildrenLoading] = useState(true);
 
   const householdsQuery = useMemoFirebase(
     () => (firestore ? query(collection(firestore, 'households')) : null),
     [firestore]
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
-  
-  const childrenQuery = useMemoFirebase(
-    () => (firestore ? collectionGroup(firestore, 'children') : null),
-    [firestore]
-  );
-  const { data: children, isLoading: childrenLoading } = useCollection<Child>(childrenQuery);
+
+  useEffect(() => {
+    if (firestore && households) {
+      const fetchAllChildren = async () => {
+        setChildrenLoading(true);
+        const childrenPromises = households.map(h => 
+          getDocs(collection(firestore, 'households', h.id, 'children'))
+        );
+        const childrenSnapshots = await Promise.all(childrenPromises);
+        const childrenData = childrenSnapshots.flatMap(snap => 
+          snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Child))
+        );
+        setAllChildren(childrenData);
+        setChildrenLoading(false);
+      };
+      fetchAllChildren();
+    }
+  }, [firestore, households]);
   
   useEffect(() => {
-    if (children) {
+    if (allChildren) {
       // This is placeholder logic to simulate progress status
-      const childrenWithRandomStatus = children.map(child => ({
+      const childrenWithRandomStatus = allChildren.map(child => ({
         ...child,
         status: Math.random() > 0.5 ? 'Improved' : 'Declined' as 'Improved' | 'Declined',
       }));
       setChildrenWithStatus(childrenWithRandomStatus);
     }
-  }, [children]); 
+  }, [allChildren]); 
 
 
   const isLoading = isUserLoading || householdsLoading || childrenLoading;
 
-  const totalChildren = children?.length ?? 0;
+  const totalChildren = allChildren.length ?? 0;
   const improvedCount = childrenWithStatus.filter(c => c.status === 'Improved').length;
   const declinedCount = childrenWithStatus.filter(c => c.status === 'Declined').length;
   

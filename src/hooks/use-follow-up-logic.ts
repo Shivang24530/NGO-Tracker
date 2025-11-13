@@ -15,7 +15,6 @@ import {
   doc,
   writeBatch,
   getDocs,
-  collectionGroup,
 } from 'firebase/firestore';
 import type { Household, Child, FollowUpVisit } from '@/lib/types';
 import {
@@ -38,39 +37,51 @@ export function useFollowUpLogic(year: number) {
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
-  const childrenQuery = useMemoFirebase(
-    () => (firestore ? collectionGroup(firestore, 'children') : null),
-    [firestore]
-  );
-  const { data: children, isLoading: childrenLoading } = useCollection<Child>(childrenQuery);
-  
-  const visitsQuery = useMemoFirebase(
-    () =>
-      firestore
-        ? query(
-            collectionGroup(firestore, 'followUpVisits'),
-            where(
-              'visitDate',
-              '>=',
-              startOfYear(new Date(year, 0, 1)).toISOString()
-            ),
-            where(
-              'visitDate',
-              '<=',
-              endOfYear(new Date(year, 11, 31)).toISOString()
-            )
-          )
-        : null,
-    [firestore, year]
-  );
-
-  const {
-    data: visits,
-    isLoading: visitsLoading,
-    error: visitsError
-  } = useCollection<FollowUpVisit>(visitsQuery);
+  const [allChildren, setAllChildren] = useState<Child[]>([]);
+  const [childrenLoading, setChildrenLoading] = useState(true);
+  const [allVisits, setAllVisits] = useState<FollowUpVisit[]>([]);
+  const [visitsLoading, setVisitsLoading] = useState(true);
 
   const [isInitializing, setIsInitializing] = useState(false);
+
+  useEffect(() => {
+    if (firestore && households && !householdsLoading) {
+        const fetchChildAndVisitData = async () => {
+            setChildrenLoading(true);
+            setVisitsLoading(true);
+
+            const childrenPromises = households.map(h => 
+                getDocs(collection(firestore, 'households', h.id, 'children'))
+            );
+            const visitsPromises = households.map(h => 
+                getDocs(query(
+                    collection(firestore, 'households', h.id, 'followUpVisits'),
+                    where('visitDate', '>=', startOfYear(new Date(year, 0, 1)).toISOString()),
+                    where('visitDate', '<=', endOfYear(new Date(year, 11, 31)).toISOString())
+                ))
+            );
+
+            const [childrenSnapshots, visitsSnapshots] = await Promise.all([
+                Promise.all(childrenPromises),
+                Promise.all(visitsPromises)
+            ]);
+
+            const childrenData = childrenSnapshots.flatMap(snap => 
+                snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Child))
+            );
+            const visitsData = visitsSnapshots.flatMap(snap => 
+                snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowUpVisit))
+            );
+
+            setAllChildren(childrenData);
+            setAllVisits(visitsData);
+            setChildrenLoading(false);
+            setVisitsLoading(false);
+        };
+        
+        fetchChildAndVisitData();
+    }
+  }, [firestore, households, year, householdsLoading]);
 
   useEffect(() => {
     const initializeVisitsForHousehold = async (h: Household) => {
@@ -140,14 +151,14 @@ export function useFollowUpLogic(year: number) {
   }, [households, year, firestore, isInitializing, householdsLoading]);
 
   const quarters = useMemo(() => {
-    if (!visits || !households) return [];
+    if (!allVisits || !households) return [];
 
     return [1, 2, 3, 4].map((qNum) => {
       const quarterDate = new Date(year, (qNum - 1) * 3, 1);
       const start = startOfQuarter(quarterDate);
       const end = endOfQuarter(quarterDate);
 
-      const visitsForQuarter = visits.filter(
+      const visitsForQuarter = allVisits.filter(
         (v) => getQuarter(new Date(v.visitDate)) === qNum && getYear(new Date(v.visitDate)) === year
       );
 
@@ -173,9 +184,9 @@ export function useFollowUpLogic(year: number) {
         visits: visitsForQuarter,
       };
     });
-  }, [year, visits, households]);
+  }, [year, allVisits, households]);
 
   const isLoading = isUserLoading || householdsLoading || visitsLoading || childrenLoading || isInitializing;
 
-  return { quarters, households, children, visits, isLoading };
+  return { quarters, households, children: allChildren, visits: allVisits, isLoading };
 }

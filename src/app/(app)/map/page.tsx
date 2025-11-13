@@ -7,7 +7,7 @@ import type { Household, FollowUpVisit } from '@/lib/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { MapPin, Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, collectionGroup } from 'firebase/firestore';
+import { collection, query, collectionGroup, getDocs } from 'firebase/firestore';
 import { useState, useMemo, useEffect } from 'react';
 
 type LatLng = {
@@ -20,6 +20,8 @@ export default function MapOverviewPage() {
     const { user, isUserLoading } = useUser();
     const [authFailed, setAuthFailed] = useState(false);
     const [center, setCenter] = useState<LatLng | null>(null);
+    const [allVisits, setAllVisits] = useState<FollowUpVisit[]>([]);
+    const [visitsLoading, setVisitsLoading] = useState(true);
 
     const householdsQuery = useMemoFirebase(
       () => (firestore ? query(collection(firestore, 'households')) : null),
@@ -27,11 +29,23 @@ export default function MapOverviewPage() {
     );
     const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
-    const visitsQuery = useMemoFirebase(
-        () => (firestore ? query(collectionGroup(firestore, 'followUpVisits')) : null),
-        [firestore]
-    );
-    const { data: followUpVisits, isLoading: visitsLoading } = useCollection<FollowUpVisit>(visitsQuery);
+    useEffect(() => {
+        if (firestore && households) {
+            const fetchAllVisits = async () => {
+                setVisitsLoading(true);
+                const visitsPromises = households.map(h => 
+                    getDocs(collection(firestore, 'households', h.id, 'followUpVisits'))
+                );
+                const visitsSnapshots = await Promise.all(visitsPromises);
+                const visitsData = visitsSnapshots.flatMap(snap => 
+                    snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowUpVisit))
+                );
+                setAllVisits(visitsData);
+                setVisitsLoading(false);
+            };
+            fetchAllVisits();
+        }
+    }, [firestore, households]);
 
     useEffect(() => {
         let isMounted = true;
@@ -66,9 +80,9 @@ export default function MapOverviewPage() {
     }, []);
 
     const householdsWithVisits = useMemo(() => {
-        if (!households || !followUpVisits) return [];
+        if (!households || !allVisits) return [];
         return households.map(h => {
-            const visit = followUpVisits.find(v => v.householdId === h.id);
+            const visit = allVisits.find(v => v.householdId === h.id);
             // This is a simplified status. A more robust solution would check dates.
             const status = visit?.status === 'Completed' ? 'Completed' : 'Pending';
             return {
@@ -76,7 +90,7 @@ export default function MapOverviewPage() {
                 visitStatus: visit?.status,
             };
         });
-    }, [households, followUpVisits]);
+    }, [households, allVisits]);
 
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     

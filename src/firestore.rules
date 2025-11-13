@@ -1,0 +1,52 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Checks if the user is the owner of the household document.
+    function isOwner(resource) {
+      return isSignedIn() && request.auth.uid == resource.data.ownerId;
+    }
+
+    // households/{householdId}
+    match /households/{householdId} {
+      // Any authenticated user can create a household.
+      // The new household document must have an `ownerId` field set to the user's UID.
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      
+      // Any authenticated user can list the households collection.
+      // Important for displaying all households on the main pages.
+      allow list: if isSignedIn();
+
+      // Users can read any single household document.
+      allow get: if isSignedIn();
+
+      // Only the owner can update or delete their household document.
+      allow update, delete: if isOwner(resource);
+      
+      // Children subcollection
+      match /children/{childId} {
+        // Only the owner of the parent household can manage their children's data.
+        allow read, write: if isOwner(get(/databases/$(database)/documents/households/$(householdId)));
+      }
+      
+      // FollowUpVisits subcollection
+      match /followUpVisits/{visitId} {
+        // Only the owner of the parent household can manage their follow-up visits.
+        allow read, write: if isOwner(get(/databases/$(database)/documents/households/$(householdId)));
+      }
+
+      // ChildProgressUpdates nested subcollection
+      match /children/{childId}/childProgressUpdates/{updateId} {
+        // Only the owner of the grandparent household can manage progress updates.
+        allow read, write: if isOwner(get(/databases/$(database)/documents/households/$(householdId)));
+      }
+    }
+  }
+}

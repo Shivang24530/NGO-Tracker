@@ -16,14 +16,16 @@ import {
   LocationChart,
 } from '@/components/analytics/charts';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, collectionGroup } from 'firebase/firestore';
+import { collection, query, getDocs } from 'firebase/firestore';
 import type { Household, Child } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 
 export default function AnalyticsPage() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
+  const [allChildren, setAllChildren] = useState<Child[]>([]);
+  const [childrenLoading, setChildrenLoading] = useState(true);
 
   const householdsQuery = useMemoFirebase(
     () => (firestore ? query(collection(firestore, 'households')) : null),
@@ -31,15 +33,23 @@ export default function AnalyticsPage() {
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
-  const childrenQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
-    // Note: This is a collection group query. 
-    // It requires a composite index on (`isStudying`, `age`, `gender`).
-    // For this app, this is the correct way to query all children from all households.
-    return query(collectionGroup(firestore, 'children'));
-  }, [firestore]);
-
-  const { data: children, isLoading: childrenLoading } = useCollection<Child>(childrenQuery);
+  useEffect(() => {
+    if (firestore && households) {
+      const fetchAllChildren = async () => {
+        setChildrenLoading(true);
+        const childrenPromises = households.map(h => 
+          getDocs(collection(firestore, 'households', h.id, 'children'))
+        );
+        const childrenSnapshots = await Promise.all(childrenPromises);
+        const childrenData = childrenSnapshots.flatMap(snap => 
+          snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Child))
+        );
+        setAllChildren(childrenData);
+        setChildrenLoading(false);
+      };
+      fetchAllChildren();
+    }
+  }, [firestore, households]);
 
 
   const isLoading = isUserLoading || householdsLoading || childrenLoading;
@@ -69,7 +79,7 @@ export default function AnalyticsPage() {
               <CardTitle>Age Group Distribution</CardTitle>
             </CardHeader>
             <CardContent className="pl-2">
-              <AgeGroupChart data={children || []} />
+              <AgeGroupChart data={allChildren} />
             </CardContent>
           </Card>
           <Card>
@@ -77,7 +87,7 @@ export default function AnalyticsPage() {
               <CardTitle>Gender Distribution</CardTitle>
             </CardHeader>
             <CardContent>
-              <GenderChart data={children || []} />
+              <GenderChart data={allChildren} />
             </CardContent>
           </Card>
           <Card>
@@ -85,7 +95,7 @@ export default function AnalyticsPage() {
               <CardTitle>Current Study Status</CardTitle>
             </CardHeader>
             <CardContent className="pl-2">
-              <StudyStatusChart data={children || []} />
+              <StudyStatusChart data={allChildren} />
             </CardContent>
           </Card>
           <Card>
