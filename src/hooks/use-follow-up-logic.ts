@@ -45,14 +45,22 @@ export function useFollowUpLogic(year: number) {
   // Effect for fetching nested children and visits data
   useEffect(() => {
     if (!firestore || !households) {
-      // If there are no households, we can stop loading for children and visits.
-      if(households === null || households.length === 0){
+      if (households === null) { // Only stop loading if households is explicitly null (initial load)
         setChildrenLoading(false);
         setVisitsLoading(false);
       }
       return;
     };
     
+    // If households list is empty, there's nothing to fetch.
+    if (households.length === 0) {
+        setAllChildren([]);
+        setAllVisits([]);
+        setChildrenLoading(false);
+        setVisitsLoading(false);
+        return;
+    }
+
     const fetchChildAndVisitData = async () => {
       setChildrenLoading(true);
       setVisitsLoading(true);
@@ -139,8 +147,6 @@ export function useFollowUpLogic(year: number) {
                     }
                     if (batchHasWrites) {
                        await batch.commit();
-                       // Optionally re-fetch visits data here if immediate UI update is needed,
-                       // but the listener on useCollection for visits should handle this.
                     }
                 }
             } catch (error) {
