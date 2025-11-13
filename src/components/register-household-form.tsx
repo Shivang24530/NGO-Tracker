@@ -38,6 +38,7 @@ import placeholderImages from '@/lib/placeholder-images.json';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { cn } from '@/lib/utils';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+import type { FollowUpVisit } from '@/lib/types';
 
 const childSchema = z.object({
   name: z.string().min(2, 'Name is too short'),
@@ -191,7 +192,6 @@ export function RegisterHouseholdForm() {
 
     try {
         const batch = writeBatch(firestore);
-        const today = new Date();
         
         // Use user's UID for the household ID to enforce ownership
         const householdRef = doc(firestore, 'households', user.uid);
@@ -203,7 +203,7 @@ export function RegisterHouseholdForm() {
           locationArea: values.locationArea,
           primaryContact: values.primaryContact,
           status: 'Active' as const,
-          nextFollowupDue: formatISO(addMonths(today, 3)),
+          nextFollowupDue: formatISO(addMonths(new Date(), 3)),
           latitude: values.latitude || 28.7041,
           longitude: values.longitude || 77.1025,
           familyPhotoUrl: values.familyPhotoUrl || 'https://picsum.photos/seed/h-new/600/400',
@@ -230,16 +230,23 @@ export function RegisterHouseholdForm() {
             });
         });
 
-        const visitRef = doc(collection(householdRef, 'followUpVisits'));
-        batch.set(visitRef, {
-            id: visitRef.id,
-            householdId: user.uid,
-            visitDate: formatISO(today),
-            visitType: 'Quarterly' as const,
-            visitedBy: user.displayName || 'Priya Sharma',
-            status: 'Completed' as const,
-            notes: 'Initial registration visit.',
-        });
+        const visitsColRef = collection(householdRef, 'followUpVisits');
+        const year = new Date().getFullYear();
+
+        for (let qNum = 1; qNum <= 4; qNum++) {
+            const quarterDate = new Date(year, (qNum - 1) * 3, 15); // Mid-month of the start of the quarter
+            const newVisitRef = doc(visitsColRef);
+            const newVisitData: Omit<FollowUpVisit, 'childProgressUpdates'> = {
+                id: newVisitRef.id,
+                householdId: user.uid,
+                visitDate: formatISO(quarterDate),
+                visitType: qNum === 4 ? 'Annual' : 'Quarterly', // Example: Q4 is annual
+                status: 'Pending',
+                visitedBy: '',
+                notes: '',
+            };
+            batch.set(newVisitRef, newVisitData);
+        }
 
         await batch.commit();
 

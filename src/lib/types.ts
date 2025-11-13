@@ -15,8 +15,6 @@ export type Household = {
   waterSupply: 'Piped' | 'Well' | 'Tanker' | 'Other';
   electricity: boolean;
   annualIncome: number;
-  children: Child[];
-  visits: FollowUpVisit[];
 };
 
 export type Child = {
@@ -38,7 +36,7 @@ export type FollowUpVisit = {
   visitedBy: string;
   notes?: string;
   status: 'Completed' | 'Pending' | 'Overdue';
-  childProgressUpdates: ChildProgressUpdate[];
+  childProgressUpdates?: ChildProgressUpdate[];
 };
 
 export type ChildProgressUpdate = {
