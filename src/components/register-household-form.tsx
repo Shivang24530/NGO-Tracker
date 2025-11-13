@@ -428,12 +428,12 @@ export function RegisterHouseholdForm() {
                 <div className="border-dashed border-2 rounded-lg aspect-video flex items-center justify-center text-muted-foreground bg-secondary/30 overflow-hidden">
                   {familyPhotoUrl ? <Image src={familyPhotoUrl} alt="Family" width={600} height={400} className="w-full h-full object-cover" data-ai-hint="family portrait"/> : <span>No photo</span>}
                 </div>
-                <div className="flex gap-2">
-                    <Button type="button" variant="outline" className="w-full" onClick={() => handleCapturePhoto('family')} disabled={!!isProcessing}>
+                <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" className="flex-grow" onClick={() => handleCapturePhoto('family')} disabled={!!isProcessing}>
                         {isProcessing === 'family' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
                         {isProcessing === 'family' ? 'Capturing...' : 'Take Photo'}
                     </Button>
-                    <Button type="button" variant="outline" className="w-full" onClick={() => handleUploadPhoto('family')} disabled={!!isProcessing}>
+                    <Button type="button" variant="outline" className="flex-grow" onClick={() => handleUploadPhoto('family')} disabled={!!isProcessing}>
                         {isProcessing === 'family-upload' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                         {isProcessing === 'family-upload' ? 'Uploading...' : 'Upload Photo'}
                     </Button>
@@ -444,12 +444,12 @@ export function RegisterHouseholdForm() {
                 <div className="border-dashed border-2 rounded-lg aspect-video flex items-center justify-center text-muted-foreground bg-secondary/30 overflow-hidden">
                     {housePhotoUrl ? <Image src={housePhotoUrl} alt="House" width={600} height={400} className="w-full h-full object-cover" data-ai-hint="modest house" /> : <span>No photo</span>}
                 </div>
-                <div className="flex gap-2">
-                    <Button type="button" variant="outline" className="w-full" onClick={() => handleCapturePhoto('house')} disabled={!!isProcessing}>
+                <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" className="flex-grow" onClick={() => handleCapturePhoto('house')} disabled={!!isProcessing}>
                         {isProcessing === 'house' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
                         {isProcessing === 'house' ? 'Capturing...' : 'Take Photo'}
                     </Button>
-                     <Button type="button" variant="outline" className="w-full" onClick={() => handleUploadPhoto('house')} disabled={!!isProcessing}>
+                     <Button type="button" variant="outline" className="flex-grow" onClick={() => handleUploadPhoto('house')} disabled={!!isProcessing}>
                         {isProcessing === 'house-upload' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                         {isProcessing === 'house-upload' ? 'Uploading...' : 'Upload Photo'}
                     </Button>
