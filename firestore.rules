@@ -48,5 +48,10 @@ service cloud.firestore {
         allow read, write: if isOwner(get(/databases/$(database)/documents/households/$(householdId)));
       }
     }
+
+    // Rule for collection group query on 'children'
+    match /{path=**}/children/{childId} {
+      allow list, read: if isSignedIn();
+    }
   }
 }

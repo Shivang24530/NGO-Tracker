@@ -16,7 +16,7 @@ import {
   LocationChart,
 } from '@/components/analytics/charts';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query } from 'firebase/firestore';
+import { collection, query, collectionGroup } from 'firebase/firestore';
 import type { Household, Child } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 import { useMemo } from 'react';
@@ -31,21 +31,12 @@ export default function AnalyticsPage() {
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
-  const allChildrenQuery = useMemoFirebase(
-    () => (firestore ? collection(firestore, 'households', 'dummy_id_for_group_query', 'children') : null),
-    [firestore]
-  );
-
   const childrenQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     // Note: This is a collection group query. 
     // It requires a composite index on (`isStudying`, `age`, `gender`).
-    // For simplicity in this context, we will query all children from all households.
-    // This can be slow and expensive on large datasets.
-    return query(collection(firestore, 'households').withConverter({
-        toFirestore: (data: any) => data,
-        fromFirestore: (snap) => snap.data()
-    }).parent.collectionGroup('children'));
+    // For this app, this is the correct way to query all children from all households.
+    return query(collectionGroup(firestore, 'children'));
   }, [firestore]);
 
   const { data: children, isLoading: childrenLoading } = useCollection<Child>(childrenQuery);
