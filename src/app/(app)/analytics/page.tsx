@@ -34,9 +34,20 @@ export default function AnalyticsPage() {
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
   useEffect(() => {
-    if (firestore && households) {
-      const fetchAllChildren = async () => {
-        setChildrenLoading(true);
+    if (!firestore || households === null) {
+      setChildrenLoading(true);
+      return;
+    }
+
+    if (households.length === 0) {
+      setAllChildren([]);
+      setChildrenLoading(false);
+      return;
+    }
+      
+    const fetchAllChildren = async () => {
+      setChildrenLoading(true);
+      try {
         const childrenPromises = households.map(h => 
           getDocs(collection(firestore, 'households', h.id, 'children'))
         );
@@ -45,10 +56,14 @@ export default function AnalyticsPage() {
           snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Child))
         );
         setAllChildren(childrenData);
+      } catch (error) {
+        console.error("Error fetching all children for analytics:", error);
+        setAllChildren([]);
+      } finally {
         setChildrenLoading(false);
-      };
-      fetchAllChildren();
-    }
+      }
+    };
+    fetchAllChildren();
   }, [firestore, households]);
 
 

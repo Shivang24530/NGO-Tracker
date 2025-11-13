@@ -7,7 +7,7 @@ import type { Household, FollowUpVisit } from '@/lib/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { MapPin, Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, collectionGroup, getDocs } from 'firebase/firestore';
+import { collection, query, getDocs } from 'firebase/firestore';
 import { useState, useMemo, useEffect } from 'react';
 
 type LatLng = {
@@ -30,9 +30,20 @@ export default function MapOverviewPage() {
     const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
     useEffect(() => {
-        if (firestore && households) {
-            const fetchAllVisits = async () => {
-                setVisitsLoading(true);
+        if (!firestore || households === null) {
+            setVisitsLoading(true);
+            return;
+        }
+
+        if (households.length === 0) {
+            setAllVisits([]);
+            setVisitsLoading(false);
+            return;
+        }
+
+        const fetchAllVisits = async () => {
+            setVisitsLoading(true);
+            try {
                 const visitsPromises = households.map(h => 
                     getDocs(collection(firestore, 'households', h.id, 'followUpVisits'))
                 );
@@ -41,10 +52,14 @@ export default function MapOverviewPage() {
                     snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowUpVisit))
                 );
                 setAllVisits(visitsData);
+            } catch (error) {
+                console.error("Error fetching all visits for map:", error);
+                setAllVisits([]);
+            } finally {
                 setVisitsLoading(false);
-            };
-            fetchAllVisits();
-        }
+            }
+        };
+        fetchAllVisits();
     }, [firestore, households]);
 
     useEffect(() => {
