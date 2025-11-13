@@ -1,11 +1,9 @@
 import { Household, Child, FollowUpVisit, ChildProgressUpdate } from './types';
-import { subDays, addMonths, formatISO } from 'date-fns';
 
 // This file contains mock data. In a real application, this data would
 // be fetched from a database like Firestore.
-// It is kept here to prevent build errors in components that still rely on it.
-
-const today = new Date();
+// It is kept here to prevent build errors in components that may still rely on it,
+// but the data is intentionally left empty as pages are migrated to live data.
 
 export const childProgressUpdates: ChildProgressUpdate[] = [];
 

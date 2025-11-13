@@ -1,3 +1,6 @@
+
+'use client';
+
 import { PageHeader } from '@/components/common/page-header';
 import {
   Table,
@@ -8,9 +11,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { children, households } from '@/lib/data';
 import { ProgressAnalysis } from '@/components/genai/progress-analysis';
-import { ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -18,16 +20,47 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import { collection, query, collectionGroup } from 'firebase/firestore';
+import type { Child, Household } from '@/lib/types';
+import { useEffect, useState } from 'react';
 
 export default function ProgressTrackingPage() {
-  const childrenWithStatus = children.map(child => {
-    const status = Math.random() > 0.5 ? 'Improved' : 'Declined';
-    return { ...child, status };
-  });
+  const firestore = useFirestore();
+  const { user, isUserLoading } = useUser();
+  const [childrenWithStatus, setChildrenWithStatus] = useState<(Child & { status: 'Improved' | 'Declined' })[]>([]);
+
+  const householdsQuery = useMemoFirebase(
+    () => (user?.uid ? collection(firestore, 'households') : null),
+    [firestore, user]
+  );
+  const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
+
+  const childrenQuery = useMemoFirebase(
+    () => (user?.uid ? collectionGroup(firestore, 'children') : null),
+    [firestore, user]
+  );
+  const { data: children, isLoading: childrenLoading } = useCollection<Child>(childrenQuery);
+  
+  useEffect(() => {
+    if (children) {
+      const childrenWithRandomStatus = children.map(child => ({
+        ...child,
+        status: Math.random() > 0.5 ? 'Improved' : 'Declined' as 'Improved' | 'Declined',
+      }));
+      setChildrenWithStatus(childrenWithRandomStatus);
+    }
+  }, [children]);
+
+
+  const isLoading = isUserLoading || householdsLoading || childrenLoading;
 
   const improvedCount = childrenWithStatus.filter(c => c.status === 'Improved').length;
   const declinedCount = childrenWithStatus.filter(c => c.status === 'Declined').length;
-
+  
+  const findHouseholdName = (householdId: string) => {
+    return households?.find(h => h.id === householdId)?.familyName || '...';
+  }
 
   return (
     <div className="flex min-h-screen w-full flex-col">
@@ -37,7 +70,7 @@ export default function ProgressTrackingPage() {
             <Card>
                 <CardHeader className="pb-2">
                     <CardDescription>Improved (Back to School)</CardDescription>
-                    <CardTitle className="text-4xl text-primary">{improvedCount}</CardTitle>
+                    <CardTitle className="text-4xl text-primary">{isLoading ? '...' : improvedCount}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="text-xs text-muted-foreground flex items-center">
@@ -49,7 +82,7 @@ export default function ProgressTrackingPage() {
             <Card>
                 <CardHeader className="pb-2">
                     <CardDescription>Declined (Dropped Out)</CardDescription>
-                    <CardTitle className="text-4xl text-destructive">{declinedCount}</CardTitle>
+                    <CardTitle className="text-4xl text-destructive">{isLoading ? '...' : declinedCount}</CardTitle>
                 </CardHeader>
                 <CardContent>
                      <div className="text-xs text-muted-foreground flex items-center">
@@ -81,10 +114,17 @@ export default function ProgressTrackingPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {childrenWithStatus.map((child) => (
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center">
+                      <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                    </TableCell>
+                  </TableRow>
+                ) : childrenWithStatus.length > 0 ? (
+                  childrenWithStatus.map((child) => (
                   <TableRow key={child.id}>
                     <TableCell className="font-medium">{child.name}</TableCell>
-                    <TableCell>{households.find(h => h.id === child.householdId)?.familyName}</TableCell>
+                    <TableCell>{findHouseholdName(child.householdId)}</TableCell>
                     <TableCell>{child.age}</TableCell>
                     <TableCell>
                       <Badge
@@ -98,7 +138,12 @@ export default function ProgressTrackingPage() {
                       {child.isStudying ? child.currentClass : 'N/A'}
                     </TableCell>
                   </TableRow>
-                ))}
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center">No children found.</TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </CardContent>
