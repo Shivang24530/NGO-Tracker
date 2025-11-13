@@ -39,7 +39,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { cn } from '@/lib/utils';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import type { FollowUpVisit } from '@/lib/types';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose, DialogFooter } from './ui/dialog';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 
 
@@ -117,9 +117,6 @@ export function RegisterHouseholdForm() {
   const [initialCenter, setInitialCenter] = useState<{lat: number, lng: number} | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
 
-  const [hasCameraPermission, setHasCameraPermission] = useState(true);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const familyPhotoInputRef = useRef<HTMLInputElement>(null);
   const housePhotoInputRef = useRef<HTMLInputElement>(null);
 
@@ -144,36 +141,6 @@ export function RegisterHouseholdForm() {
   const housePhotoUrl = watch('housePhotoUrl');
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-
-  useEffect(() => {
-    if (step === 3) { // Only request camera when on the photo step
-        const getCameraPermission = async () => {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                setHasCameraPermission(false);
-                return;
-            }
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                setHasCameraPermission(true);
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                }
-            } catch (error) {
-                console.error('Error accessing camera:', error);
-                setHasCameraPermission(false);
-            }
-        };
-        getCameraPermission();
-        
-        return () => { // Cleanup: stop video stream when component unmounts or step changes
-            if (videoRef.current && videoRef.current.srcObject) {
-                const stream = videoRef.current.srcObject as MediaStream;
-                stream.getTracks().forEach(track => track.stop());
-            }
-        };
-    }
-  }, [step]);
-
 
   useEffect(() => {
     if (!apiKey) {
@@ -226,26 +193,6 @@ export function RegisterHouseholdForm() {
     setValue('longitude', lng, { shouldValidate: true });
   };
   
-  const handleSnapPhoto = (type: 'family' | 'house') => {
-      if (videoRef.current && canvasRef.current) {
-          const video = videoRef.current;
-          const canvas = canvasRef.current;
-          const context = canvas.getContext('2d');
-          
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          context?.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-          
-          const dataUrl = canvas.toDataURL('image/jpeg');
-          setValue(type === 'family' ? 'familyPhotoUrl' : 'housePhotoUrl', dataUrl, { shouldValidate: true });
-          
-          toast({
-              title: 'Photo Captured',
-              description: `The ${type} photo has been saved.`,
-          });
-      }
-  };
-
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, type: 'family' | 'house') => {
     const file = event.target.files?.[0];
     if (file) {
@@ -350,38 +297,108 @@ export function RegisterHouseholdForm() {
     }
   }
 
-  const CameraDialog = ({ type }: { type: 'family' | 'house' }) => (
-    <Dialog>
+  const CameraDialog = ({ type, onSnap }: { type: 'family' | 'house', onSnap: (dataUrl: string) => void }) => {
+    const [open, setOpen] = useState(false);
+    const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+  
+    useEffect(() => {
+      async function setupCamera() {
+        if (!open) {
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+          }
+          return;
+        }
+  
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setHasCameraPermission(false);
+          return;
+        }
+  
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          streamRef.current = stream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+          }
+          setHasCameraPermission(true);
+        } catch (error) {
+          console.error('Error accessing camera:', error);
+          setHasCameraPermission(false);
+        }
+      }
+  
+      setupCamera();
+  
+      return () => {
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+        }
+      };
+    }, [open]);
+  
+    const handleSnap = () => {
+      if (videoRef.current && canvasRef.current) {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        const context = canvas.getContext('2d');
+  
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context?.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+  
+        const dataUrl = canvas.toDataURL('image/jpeg');
+        onSnap(dataUrl);
+        setOpen(false);
+      }
+    };
+  
+    return (
+      <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-            <Button type="button" variant="outline" className="flex-grow" disabled={!hasCameraPermission}>
-                <Camera className="mr-2 h-4 w-4" /> Take Photo
-            </Button>
+          <Button type="button" variant="outline" className="flex-grow">
+            <Camera className="mr-2 h-4 w-4" /> Take Photo
+          </Button>
         </DialogTrigger>
         <DialogContent className="max-w-2xl">
-            <DialogHeader>
-                <DialogTitle>Take {type === 'family' ? 'Family' : 'House'} Photo</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-                <div className="bg-black rounded-md overflow-hidden aspect-video flex items-center justify-center">
-                    <video ref={videoRef} className="w-full h-auto" autoPlay muted playsInline />
-                </div>
-                {!hasCameraPermission && (
-                    <Alert variant="destructive">
-                        <AlertTitle>Camera Access Denied</AlertTitle>
-                        <AlertDescription>
-                            Please enable camera permissions in your browser settings to use this feature.
-                        </AlertDescription>
-                    </Alert>
-                )}
-                <DialogClose asChild>
-                    <Button onClick={() => handleSnapPhoto(type)} disabled={!hasCameraPermission}>
-                        <Camera className="mr-2 h-4 w-4" /> Snap Photo
-                    </Button>
-                </DialogClose>
-            </div>
+          <DialogHeader>
+            <DialogTitle>Take {type === 'family' ? 'Family' : 'House'} Photo</DialogTitle>
+          </DialogHeader>
+          <canvas ref={canvasRef} className="hidden" />
+          <div className="space-y-4">
+            {hasCameraPermission === null && (
+              <div className="flex items-center justify-center p-8">
+                <Loader2 className="h-8 w-8 animate-spin" />
+              </div>
+            )}
+            {hasCameraPermission === false && (
+              <Alert variant="destructive">
+                <AlertTitle>Camera Access Denied</AlertTitle>
+                <AlertDescription>
+                  Please enable camera permissions in your browser settings. You may need to reload the page after granting permission.
+                </AlertDescription>
+              </Alert>
+            )}
+            {hasCameraPermission && (
+              <div className="bg-black rounded-md overflow-hidden aspect-video flex items-center justify-center">
+                <video ref={videoRef} className="w-full h-auto" autoPlay muted playsInline />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+             <Button type="button" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={handleSnap} disabled={!hasCameraPermission}>
+              <Camera className="mr-2 h-4 w-4" /> Snap Photo
+            </Button>
+          </DialogFooter>
         </DialogContent>
-    </Dialog>
-  );
+      </Dialog>
+    );
+  };
 
   const renderStepContent = () => {
     switch (step) {
@@ -488,7 +505,6 @@ export function RegisterHouseholdForm() {
       case 3:
         return (
             <>
-            <canvas ref={canvasRef} className="hidden" />
             <input type="file" accept="image/*" ref={familyPhotoInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'family')} />
             <input type="file" accept="image/*" ref={housePhotoInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'house')} />
             <div className="grid md:grid-cols-2 gap-8">
@@ -498,7 +514,7 @@ export function RegisterHouseholdForm() {
                   {familyPhotoUrl ? <Image src={familyPhotoUrl} alt="Family" width={600} height={400} className="w-full h-full object-cover" data-ai-hint="family portrait"/> : <span>No photo</span>}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <CameraDialog type="family" />
+                    <CameraDialog type="family" onSnap={(dataUrl) => setValue('familyPhotoUrl', dataUrl, { shouldValidate: true })} />
                     <Button type="button" variant="outline" className="flex-grow" onClick={() => familyPhotoInputRef.current?.click()}>
                         <Upload className="mr-2 h-4 w-4" /> Upload Photo
                     </Button>
@@ -510,7 +526,7 @@ export function RegisterHouseholdForm() {
                     {housePhotoUrl ? <Image src={housePhotoUrl} alt="House" width={600} height={400} className="w-full h-full object-cover" data-ai-hint="modest house" /> : <span>No photo</span>}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <CameraDialog type="house" />
+                    <CameraDialog type="house" onSnap={(dataUrl) => setValue('housePhotoUrl', dataUrl, { shouldValidate: true })} />
                     <Button type="button" variant="outline" className="flex-grow" onClick={() => housePhotoInputRef.current?.click()}>
                         <Upload className="mr-2 h-4 w-4" /> Upload Photo
                     </Button>
@@ -570,3 +586,4 @@ export function RegisterHouseholdForm() {
     </Form>
   );
 }
+
