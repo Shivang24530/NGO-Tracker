@@ -7,6 +7,8 @@ import {
   useUser,
   useCollection,
   useMemoFirebase,
+  errorEmitter,
+  FirestorePermissionError,
 } from '@/firebase';
 import {
   collection,
@@ -45,17 +47,14 @@ export function useFollowUpLogic(year: number) {
   // Effect for fetching nested children and visits data
   useEffect(() => {
     if (!firestore || !households) {
-      if (households === null) { // Only stop loading if households is explicitly null (initial load)
+      if (households === null) {
         setChildrenLoading(false);
         setVisitsLoading(false);
       }
       return;
     };
     
-    // If households list is empty, there's nothing to fetch.
     if (households.length === 0) {
-        setAllChildren([]);
-        setAllVisits([]);
         setChildrenLoading(false);
         setVisitsLoading(false);
         return;
@@ -107,9 +106,14 @@ export function useFollowUpLogic(year: number) {
   // Effect for initializing missing visits for the selected year
   useEffect(() => {
     const initializeVisits = async () => {
-        if (!firestore || !households || households.length === 0) return;
+        if (!firestore || !user || !households || households.length === 0) return;
 
         for (const h of households) {
+            // CRITICAL: Only allow owners to create visits to align with security rules
+            if (h.ownerId !== user.uid) {
+                continue;
+            }
+            
             try {
                 const visitsColRef = collection(firestore, `households/${h.id}/followUpVisits`);
                 const yearQuery = query(
@@ -146,7 +150,15 @@ export function useFollowUpLogic(year: number) {
                         }
                     }
                     if (batchHasWrites) {
-                       await batch.commit();
+                       batch.commit().catch(error => {
+                           console.error(`Failed to commit batch for household ${h.id}:`, error);
+                           const permissionError = new FirestorePermissionError({
+                               path: `households/${h.id}/followUpVisits`,
+                               operation: 'create',
+                               requestResourceData: { note: 'Batch creation of visits' }
+                           });
+                           errorEmitter.emit('permission-error', permissionError);
+                       });
                     }
                 }
             } catch (error) {
@@ -156,7 +168,7 @@ export function useFollowUpLogic(year: number) {
     };
 
     initializeVisits();
-  }, [firestore, households, year]);
+  }, [firestore, user, households, year]);
 
 
   const quarters = useMemo(() => {
