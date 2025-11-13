@@ -1,3 +1,4 @@
+
 'use client';
 import Link from 'next/link';
 import { PageHeader } from '@/components/common/page-header';
@@ -50,6 +51,14 @@ export default function FollowUpsPage() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
 
+  const householdsQuery = useMemoFirebase(
+    () =>
+      user?.uid ? query(collection(firestore, 'households'), where('id', '==', user.uid)) : null,
+    [firestore, user]
+  );
+  const { data: households, isLoading: householdsLoading } =
+    useCollection<Household>(householdsQuery);
+
   const visitsQuery = useMemoFirebase(
     () =>
       user?.uid
@@ -60,31 +69,9 @@ export default function FollowUpsPage() {
   const { data: followUpVisits, isLoading: visitsLoading } =
     useCollection<FollowUpVisit>(visitsQuery);
   
-  const recentVisitsQuery = useMemoFirebase(
-    () =>
-      user?.uid
-        ? query(
-            collection(firestore, 'households', user.uid, 'followUpVisits'),
-            where('status', '==', 'Completed'),
-            orderBy('visitDate', 'desc'),
-            limit(5)
-          )
-        : null,
-    [firestore, user]
-  );
-  const { data: recentVisits, isLoading: recentVisitsLoading } = useCollection<FollowUpVisit>(recentVisitsQuery);
-
-  const householdsQuery = useMemoFirebase(
-    () =>
-      user?.uid ? query(collection(firestore, 'households'), where('id', '==', user.uid)) : null,
-    [firestore, user]
-  );
-  const { data: households, isLoading: householdsLoading } =
-    useCollection<Household>(householdsQuery);
 
   const now = new Date();
-  const today = endOfDay(now);
-
+  
   const overdue =
     followUpVisits?.filter(
       (v) =>
@@ -92,19 +79,24 @@ export default function FollowUpsPage() {
         isPast(new Date(v.visitDate)) &&
         !isSameDay(new Date(v.visitDate), now)
     ) ?? [];
+
   const upcoming =
     followUpVisits?.filter(
       (v) => v.status === 'Pending' && isThisMonth(new Date(v.visitDate))
     ) ?? [];
+  
   const completed =
     followUpVisits?.filter((v) => v.status === 'Completed') ?? [];
-  
+
+  const recentVisits = 
+    completed.sort((a, b) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime()).slice(0, 5) ?? [];
+
   const totalFamilies = households?.length ?? 0;
 
-  const isLoading = isUserLoading || visitsLoading || householdsLoading || recentVisitsLoading;
+  const isLoading = isUserLoading || visitsLoading || householdsLoading;
 
-  const findHousehold = (householdId: string) =>
-    households?.find((h) => h.id === householdId);
+  const findHouseholdName = (householdId: string) =>
+    households?.find((h) => h.id === householdId)?.familyName;
 
   return (
     <div className="flex min-h-screen w-full flex-col">
@@ -130,14 +122,14 @@ export default function FollowUpsPage() {
                 {isLoading ? <p className="text-center py-8 text-muted-foreground">Loading...</p> : overdue.length > 0 ? (
                     <div className="space-y-4">
                         {overdue.map((visit) => {
-                            const household = findHousehold(visit.householdId);
+                            const householdName = findHouseholdName(visit.householdId);
                             return (
                                 <Link href={`/follow-ups/${visit.id}/conduct`} key={visit.id} className="block border p-4 rounded-lg hover:bg-secondary">
                                     <div className="flex justify-between items-center">
-                                        <p className="font-semibold">{household?.familyName}</p>
+                                        <p className="font-semibold">{householdName}</p>
                                         <p className="text-sm text-muted-foreground">{new Date(visit.visitDate).toLocaleDateString()}</p>
                                     </div>
-                                    <p className="text-sm text-muted-foreground">{household?.locationArea}</p>
+                                    <p className="text-sm text-muted-foreground">{households?.find(h => h.id === visit.householdId)?.locationArea}</p>
                                 </Link>
                             )
                         })}
@@ -159,14 +151,14 @@ export default function FollowUpsPage() {
                 {isLoading ? <p className="text-center py-8 text-muted-foreground">Loading...</p> : upcoming.length > 0 ? (
                     <div className="space-y-4">
                         {upcoming.map((visit) => {
-                             const household = findHousehold(visit.householdId);
+                             const householdName = findHouseholdName(visit.householdId);
                              return (
                                 <Link href={`/follow-ups/${visit.id}/conduct`} key={visit.id} className="block border p-4 rounded-lg hover:bg-secondary">
                                     <div className="flex justify-between items-center">
-                                        <p className="font-semibold">{household?.familyName}</p>
+                                        <p className="font-semibold">{householdName}</p>
                                         <p className="text-sm text-muted-foreground">{new Date(visit.visitDate).toLocaleDateString()}</p>
                                     </div>
-                                     <p className="text-sm text-muted-foreground">{household?.locationArea}</p>
+                                     <p className="text-sm text-muted-foreground">{households?.find(h => h.id === visit.householdId)?.locationArea}</p>
                                 </Link>
                              )
                         })}
@@ -189,12 +181,12 @@ export default function FollowUpsPage() {
                 {isLoading ? <p className="text-center py-8 text-muted-foreground">Loading...</p> : recentVisits && recentVisits.length > 0 ? (
                     <div className="space-y-2">
                         {recentVisits.map(visit => {
-                             const household = findHousehold(visit.householdId);
+                             const householdName = findHouseholdName(visit.householdId);
                              return (
                                 <div key={visit.id} className="border p-4 rounded-lg">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-4">
-                                            <p className="font-semibold">{household?.familyName || 'Unknown Family'}</p>
+                                            <p className="font-semibold">{householdName || 'Unknown Family'}</p>
                                             <Badge variant="secondary">{visit.visitType}</Badge>
                                             <p className="text-sm text-muted-foreground">by {visit.visitedBy}</p>
                                         </div>
