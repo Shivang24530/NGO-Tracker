@@ -24,6 +24,7 @@ import {
   formatISO,
   startOfYear,
   endOfYear,
+  getYear,
 } from 'date-fns';
 
 export function useFollowUpLogic(year: number) {
