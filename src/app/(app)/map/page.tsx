@@ -7,7 +7,7 @@ import type { Household, FollowUpVisit } from '@/lib/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { MapPin, Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, getDocs } from 'firebase/firestore';
+import { collection, query, getDocs, where } from 'firebase/firestore';
 import { useState, useMemo, useEffect } from 'react';
 
 type LatLng = {
@@ -24,8 +24,8 @@ export default function MapOverviewPage() {
     const [visitsLoading, setVisitsLoading] = useState(true);
 
     const householdsQuery = useMemoFirebase(
-      () => (firestore ? query(collection(firestore, 'households')) : null),
-      [firestore]
+      () => (firestore && user ? query(collection(firestore, 'households'), where('ownerId', '==', user.uid)) : null),
+      [firestore, user]
     );
     const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 

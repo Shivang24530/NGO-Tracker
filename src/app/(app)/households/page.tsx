@@ -22,7 +22,7 @@ import { MoreHorizontal, Pen, Trash2, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useCollection, useFirestore, useUser, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import type { Household } from '@/lib/types';
-import { doc, getDocs, collection, writeBatch, query } from 'firebase/firestore';
+import { doc, getDocs, collection, writeBatch, query, where } from 'firebase/firestore';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,8 +49,8 @@ export default function AllHouseholdsPage() {
   const router = useRouter();
 
   const householdsQuery = useMemoFirebase(
-    () => (firestore ? query(collection(firestore, 'households')) : null),
-    [firestore]
+    () => (firestore && user ? query(collection(firestore, 'households'), where('ownerId', '==', user.uid)) : null),
+    [firestore, user]
   );
   
   const { data: households, isLoading } = useCollection<Household>(householdsQuery);
@@ -104,13 +104,13 @@ export default function AllHouseholdsPage() {
 
   return (
     <div className="flex min-h-screen w-full flex-col">
-      <PageHeader title="All Families" />
+      <PageHeader title="All Your Families" />
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
         <Card>
           <CardHeader>
             <CardTitle>Family Directory</CardTitle>
             <CardDescription>
-              A list of all families registered in the system.
+              A list of all families you have registered in the system.
             </CardDescription>
           </CardHeader>
           <CardContent>

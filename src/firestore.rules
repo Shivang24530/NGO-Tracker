@@ -23,10 +23,9 @@ service cloud.firestore {
       // Access to individual documents is controlled by the 'get' rule below.
       allow list: if isSignedIn();
 
-      // Users can read a single household document if they are the owner.
-      // NOTE: This rule is not currently used by the app, as listing is preferred.
-      // But it's good practice to have it.
-      allow get: if isOwner(resource);
+      // Users can read any single household document. This is required for the
+      // sub-collection rules to be able to check ownership via `get()`.
+      allow get: if isSignedIn();
 
       // Only the owner can update or delete their household document.
       allow update, delete: if isOwner(resource);

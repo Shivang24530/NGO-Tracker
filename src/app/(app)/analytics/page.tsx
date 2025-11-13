@@ -16,7 +16,7 @@ import {
   LocationChart,
 } from '@/components/analytics/charts';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, getDocs } from 'firebase/firestore';
+import { collection, query, getDocs, where } from 'firebase/firestore';
 import type { Household, Child } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
@@ -28,8 +28,8 @@ export default function AnalyticsPage() {
   const [childrenLoading, setChildrenLoading] = useState(true);
 
   const householdsQuery = useMemoFirebase(
-    () => (firestore ? query(collection(firestore, 'households')) : null),
-    [firestore]
+    () => (firestore && user ? query(collection(firestore, 'households'), where('ownerId', '==', user.uid)) : null),
+    [firestore, user]
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
