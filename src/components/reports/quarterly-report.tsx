@@ -44,10 +44,11 @@ import { useFirestore } from '@/firebase';
 import type { ChildProgressUpdate } from '@/lib/types';
 
 
-function QuarterlyReportContent({ firestore }: { firestore: Firestore }) {
+function QuarterlyReportContent() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [isDownloading, setIsDownloading] = useState(false);
   const router = useRouter();
+  const firestore = useFirestore();
 
   const { quarters, households, children, isLoading } = useFollowUpLogic(year);
   
@@ -74,59 +75,56 @@ function QuarterlyReportContent({ firestore }: { firestore: Firestore }) {
         return;
       }
   
-      const household = households[0]; // Assuming one household for this simplified view.
-      if (!household) {
-        toast({ variant: 'destructive', title: 'Household not found' });
-        return;
-      }
-      
-      const visit = quarter.visits.find(v => v.householdId === household.id);
-      if (!visit) {
-         toast({ variant: 'destructive', title: 'Visit not found' });
+      // Since we need to aggregate data from all completed visits in the quarter,
+      // we'll prepare to fetch all relevant progress updates.
+      const completedVisits = quarter.visits.filter(v => v.status === 'Completed');
+      if(completedVisits.length === 0){
+         toast({ title: 'No completed surveys to report for this quarter.'});
          return;
       }
-  
-      // Fetch all child progress updates for this specific visit
-      const progressUpdatesByChild: { [childId: string]: ChildProgressUpdate } = {};
-      
-      for (const child of children) {
-          const progressUpdatesRef = collection(firestore, `households/${household.id}/children/${child.id}/childProgressUpdates`);
-          const q = query(progressUpdatesRef, where('visit_id', '==', visit.id));
-          const querySnapshot = await getDocs(q);
-          if (!querySnapshot.empty) {
-              // Assuming one progress update per child per visit
-              progressUpdatesByChild[child.id] = querySnapshot.docs[0].data() as ChildProgressUpdate;
-          }
-      }
-      
+
+      let rows: string[][] = [];
       const headers = [
         'Family Name', 'Location', 'Child Name', 'Age', 'Gender',
         'Studying?', 'Reason Not Studying', 'Working?', 'Work Details',
         'Study Challenges', 'Visit Date', 'Visited By',
       ];
-  
-      const rows = children.map((child) => {
-        const progress = progressUpdatesByChild[child.id];
-        if (!progress) return null; // Only include children with progress updates for this visit
-        
-        return [
-          household.familyName,
-          household.locationArea,
-          child.name,
-          child.age,
-          child.gender,
-          progress ? (progress.is_studying ? 'Yes' : 'No') : 'N/A',
-          progress && !progress.is_studying ? progress.not_studying_reason || '' : '',
-          progress ? (progress.is_working ? 'Yes' : 'No') : 'N/A',
-          progress && progress.is_working ? progress.work_details || '' : '',
-          progress ? progress.studying_challenges || '' : '',
-          visit ? format(new Date(visit.visitDate), 'yyyy-MM-dd') : '',
-          visit ? visit.visitedBy : '',
-        ].map(value => `"${String(value ?? '').replace(/"/g, '""')}"`);
-      }).filter(Boolean) as string[][];
-  
+
+      // Iterate through each completed visit to build the report rows
+      for (const visit of completedVisits) {
+        const household = households.find(h => h.id === visit.householdId);
+        if (!household) continue;
+
+        const householdChildren = children.filter(c => c.householdId === household.id);
+
+        for (const child of householdChildren) {
+          const progressUpdatesRef = collection(firestore, `households/${household.id}/children/${child.id}/childProgressUpdates`);
+          const q = query(progressUpdatesRef, where('visit_id', '==', visit.id));
+          const querySnapshot = await getDocs(q);
+          
+          if (!querySnapshot.empty) {
+            const progress = querySnapshot.docs[0].data() as ChildProgressUpdate;
+             const row = [
+                household.familyName,
+                household.locationArea,
+                child.name,
+                child.age,
+                child.gender,
+                progress ? (progress.is_studying ? 'Yes' : 'No') : 'N/A',
+                progress && !progress.is_studying ? progress.not_studying_reason || '' : '',
+                progress ? (progress.is_working ? 'Yes' : 'No') : 'N/A',
+                progress && progress.is_working ? progress.work_details || '' : '',
+                progress ? progress.studying_challenges || '' : '',
+                visit ? format(new Date(visit.visitDate), 'yyyy-MM-dd') : '',
+                visit ? visit.visitedBy : '',
+              ].map(value => `"${String(value ?? '').replace(/"/g, '""')}"`);
+              rows.push(row);
+          }
+        }
+      }
+      
       if (rows.length === 0) {
-          toast({ title: 'No completed surveys to report for this quarter.'});
+          toast({ title: 'No completed surveys with child data to report for this quarter.'});
           return;
       }
 
@@ -185,7 +183,11 @@ function QuarterlyReportContent({ firestore }: { firestore: Firestore }) {
           </Select>
         </div>
       </Card>
-
+        {isLoading ? (
+             <div className="flex flex-1 items-center justify-center py-16">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            </div>
+        ): (
       <Accordion
         type="single"
         collapsible
@@ -193,18 +195,12 @@ function QuarterlyReportContent({ firestore }: { firestore: Firestore }) {
       >
         {quarters.map((quarter) => {
           const completionPercentage =
-            isLoading || !households
+            !households
               ? 0
               : (quarter.completed / quarter.total) * 100;
 
           const isPastQuarter = year < currentYear || (year === currentYear && quarter.id < currentQuarterNum);
           
-          const household = households ? households[0] : null;
-          const visit = household ? quarter.visits.find(v => v.householdId === household.id) : null;
-          const visitStatus = visit?.status || 'Pending';
-          const isSurveyActionable = visitStatus !== 'Completed' && !isPastQuarter;
-
-
           return (
             <AccordionItem
               value={`item-${quarter.id}`}
@@ -249,7 +245,7 @@ function QuarterlyReportContent({ firestore }: { firestore: Firestore }) {
                     />
                   </div>
                   <div className="font-semibold text-muted-foreground">
-                    {isLoading ? '...' : `${quarter.completed}/${quarter.total}`}
+                    {`${quarter.completed}/${quarter.total}`}
                   </div>
                 </div>
               </AccordionTrigger>
@@ -283,13 +279,7 @@ function QuarterlyReportContent({ firestore }: { firestore: Firestore }) {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {isLoading ? (
-                          <TableRow>
-                            <TableCell colSpan={5} className="text-center py-8">
-                              <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-                            </TableCell>
-                          </TableRow>
-                        ) : households && households.length > 0 ? (
+                        {households && households.length > 0 ? (
                           households.map(household => {
                             const visit = quarter.visits.find(v => v.householdId === household.id);
                             const visitStatus = visit?.status || 'Pending';
@@ -358,6 +348,7 @@ function QuarterlyReportContent({ firestore }: { firestore: Firestore }) {
           );
         })}
       </Accordion>
+        )}
     </div>
   );
 }
@@ -373,5 +364,5 @@ export function QuarterlyReport() {
         );
     }
     
-    return <QuarterlyReportContent firestore={firestore} />;
+    return <QuarterlyReportContent />;
 }

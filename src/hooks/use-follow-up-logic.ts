@@ -26,13 +26,10 @@ import {
   getYear,
   formatISO,
 } from 'date-fns';
-import { useIsMounted } from '@/hooks/use-is-mounted';
-
 
 export function useFollowUpLogic(year: number) {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
-  const isMounted = useIsMounted();
 
   const householdsQuery = useMemoFirebase(
     () => (firestore ? query(collection(firestore, 'households')) : null),
@@ -45,119 +42,116 @@ export function useFollowUpLogic(year: number) {
   const [allVisits, setAllVisits] = useState<FollowUpVisit[]>([]);
   const [visitsLoading, setVisitsLoading] = useState(true);
 
-  const [isInitializing, setIsInitializing] = useState(false);
-
+  // Effect for fetching nested children and visits data
   useEffect(() => {
+    if (!firestore || !households) {
+      // If there are no households, we can stop loading for children and visits.
+      if(households === null || households.length === 0){
+        setChildrenLoading(false);
+        setVisitsLoading(false);
+      }
+      return;
+    };
+    
     const fetchChildAndVisitData = async () => {
-        if (!firestore || !households || !isMounted) return;
+      setChildrenLoading(true);
+      setVisitsLoading(true);
 
-        setChildrenLoading(true);
-        setVisitsLoading(true);
+      const childrenPromises = households.map(h => 
+          getDocs(collection(firestore, 'households', h.id, 'children'))
+      );
+      
+      const visitsPromises = households.map(h => 
+          getDocs(query(
+              collection(firestore, 'households', h.id, 'followUpVisits'),
+              where('visitDate', '>=', startOfYear(new Date(year, 0, 1)).toISOString()),
+              where('visitDate', '<=', endOfYear(new Date(year, 11, 31)).toISOString())
+          ))
+      );
 
-        const childrenPromises = households.map(h => 
-            getDocs(collection(firestore, 'households', h.id, 'children'))
-        );
-        const visitsPromises = households.map(h => 
-            getDocs(query(
-                collection(firestore, 'households', h.id, 'followUpVisits'),
-                where('visitDate', '>=', startOfYear(new Date(year, 0, 1)).toISOString()),
-                where('visitDate', '<=', endOfYear(new Date(year, 11, 31)).toISOString())
-            ))
-        );
+      try {
+          const [childrenSnapshots, visitsSnapshots] = await Promise.all([
+              Promise.all(childrenPromises),
+              Promise.all(visitsPromises)
+          ]);
 
-        try {
-            const [childrenSnapshots, visitsSnapshots] = await Promise.all([
-                Promise.all(childrenPromises),
-                Promise.all(visitsPromises)
-            ]);
+          const childrenData = childrenSnapshots.flatMap(snap => 
+              snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Child))
+          );
+          const visitsData = visitsSnapshots.flatMap(snap => 
+              snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowUpVisit))
+          );
 
-            const childrenData = childrenSnapshots.flatMap(snap => 
-                snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Child))
-            );
-            const visitsData = visitsSnapshots.flatMap(snap => 
-                snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowUpVisit))
-            );
-
-            setAllChildren(childrenData);
-            setAllVisits(visitsData);
-        } catch (error) {
-            console.error("Error fetching child and visit data:", error);
-        } finally {
-            setChildrenLoading(false);
-            setVisitsLoading(false);
-        }
+          setAllChildren(childrenData);
+          setAllVisits(visitsData);
+      } catch (error) {
+          console.error("Error fetching child and visit data:", error);
+      } finally {
+          setChildrenLoading(false);
+          setVisitsLoading(false);
+      }
     };
     
     fetchChildAndVisitData();
 
-  }, [firestore, households, year, isMounted]);
-
+  }, [firestore, households, year]);
+  
+  // Effect for initializing missing visits for the selected year
   useEffect(() => {
-    const initializeVisitsForHousehold = async (h: Household) => {
-      if (!firestore) return false;
+    const initializeVisits = async () => {
+        if (!firestore || !households || households.length === 0) return;
 
-      try {
-        const visitsColRef = collection(firestore, `households/${h.id}/followUpVisits`);
-        const yearQuery = query(
-          visitsColRef,
-          where('visitDate', '>=', startOfYear(new Date(year, 0, 1)).toISOString()),
-          where('visitDate', '<=', endOfYear(new Date(year, 11, 31)).toISOString())
-        );
+        for (const h of households) {
+            try {
+                const visitsColRef = collection(firestore, `households/${h.id}/followUpVisits`);
+                const yearQuery = query(
+                    visitsColRef,
+                    where('visitDate', '>=', startOfYear(new Date(year, 0, 1)).toISOString()),
+                    where('visitDate', '<=', endOfYear(new Date(year, 11, 31)).toISOString())
+                );
+                
+                const existingVisitsSnapshot = await getDocs(yearQuery);
+                
+                if (existingVisitsSnapshot.size < 4) {
+                    const existingQuarters = new Set(
+                        existingVisitsSnapshot.docs.map(d => getQuarter(new Date((d.data() as FollowUpVisit).visitDate)))
+                    );
+                    
+                    const batch = writeBatch(firestore);
+                    let batchHasWrites = false;
 
-        const existingVisitsSnapshot = await getDocs(yearQuery);
-        if (existingVisitsSnapshot.size >= 4) return false;
-        
-        const existingQuarters = new Set(
-          existingVisitsSnapshot.docs.map(d => getQuarter(new Date((d.data() as FollowUpVisit).visitDate)))
-        );
-        
-        const missingQuarters: number[] = [];
-        for (let qNum = 1; qNum <= 4; qNum++) {
-          if (!existingQuarters.has(qNum)) {
-            missingQuarters.push(qNum);
-          }
+                    for (let qNum = 1; qNum <= 4; qNum++) {
+                        if (!existingQuarters.has(qNum)) {
+                            const quarterDate = new Date(year, (qNum - 1) * 3 + 1, 15);
+                            const newVisitRef = doc(visitsColRef);
+                            const newVisitData: Omit<FollowUpVisit, 'childProgressUpdates'> = {
+                                id: newVisitRef.id,
+                                householdId: h.id,
+                                visitDate: formatISO(quarterDate),
+                                visitType: qNum === 4 ? 'Annual' : 'Quarterly',
+                                status: 'Pending',
+                                visitedBy: '',
+                                notes: '',
+                            };
+                            batch.set(newVisitRef, newVisitData);
+                            batchHasWrites = true;
+                        }
+                    }
+                    if (batchHasWrites) {
+                       await batch.commit();
+                       // Optionally re-fetch visits data here if immediate UI update is needed,
+                       // but the listener on useCollection for visits should handle this.
+                    }
+                }
+            } catch (error) {
+                console.error(`Failed to initialize visits for household ${h.id}:`, error);
+            }
         }
-
-        if (missingQuarters.length > 0) {
-          const batch = writeBatch(firestore);
-          missingQuarters.forEach((qNum) => {
-            const quarterDate = new Date(year, (qNum - 1) * 3 + 1, 15);
-            const newVisitRef = doc(visitsColRef);
-            const newVisitData: Omit<FollowUpVisit, 'childProgressUpdates'> = {
-              id: newVisitRef.id,
-              householdId: h.id,
-              visitDate: formatISO(quarterDate),
-              visitType: qNum === 4 ? 'Annual' : 'Quarterly',
-              status: 'Pending',
-              visitedBy: '',
-              notes: '',
-            };
-            batch.set(newVisitRef, newVisitData);
-          });
-          await batch.commit();
-          return true; // Indicates an update happened
-        }
-      } catch (error) {
-        console.error(`Failed to initialize visits for household ${h.id}:`, error);
-      }
-      return false; // No update happened
     };
 
-    const runInitialization = async () => {
-      if (!households || isInitializing || householdsLoading) return;
-      
-      setIsInitializing(true);
-      let didUpdate = false;
-      for (const h of households) {
-        const updated = await initializeVisitsForHousehold(h);
-        if (updated) didUpdate = true;
-      }
-      setIsInitializing(false);
-    };
+    initializeVisits();
+  }, [firestore, households, year]);
 
-    runInitialization();
-
-  }, [households, year, firestore, isInitializing, householdsLoading]);
 
   const quarters = useMemo(() => {
     if (!allVisits || !households) return [];
@@ -195,7 +189,7 @@ export function useFollowUpLogic(year: number) {
     });
   }, [year, allVisits, households]);
 
-  const isLoading = isUserLoading || householdsLoading || visitsLoading || childrenLoading || isInitializing;
+  const isLoading = isUserLoading || householdsLoading || visitsLoading || childrenLoading;
 
   return { quarters, households, children: allChildren, visits: allVisits, isLoading };
 }
