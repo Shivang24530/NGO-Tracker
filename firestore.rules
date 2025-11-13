@@ -53,7 +53,8 @@ service cloud.firestore {
     // This rule allows a user to list all children across all households
     // IF they are the owner of the parent household for each child.
     match /{path=**}/children/{childId} {
-      allow list, read: if isOwner(get(path.slice(0, path.lastIndexOf('/children'))));
+      allow list: if get(/databases/$(database)/documents/households/$(path[1])).data.ownerId == request.auth.uid;
+      allow read: if isOwner(get(path.slice(0, path.lastIndexOf('/children'))));
     }
   }
 }
