@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   useFirestore,
   useUser,
@@ -14,6 +14,7 @@ import {
   where,
   doc,
   writeBatch,
+  getDocs,
 } from 'firebase/firestore';
 import type { Household, Child, FollowUpVisit } from '@/lib/types';
 import {
@@ -29,7 +30,6 @@ import {
 export function useFollowUpLogic(year: number) {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
-  const [isInitializing, setIsInitializing] = useState(false);
   const [dataVersion, setDataVersion] = useState(0); // State to trigger re-fetch
 
   const householdRef = useMemoFirebase(
@@ -75,71 +75,78 @@ export function useFollowUpLogic(year: number) {
     error: visitsError,
   } = useCollection<FollowUpVisit>(visitsQuery);
 
+  const [isInitializing, setIsInitializing] = useState(false);
+
+  // This effect will run once when the user and year are available.
+  // It checks for missing visits and creates them if needed.
   useEffect(() => {
-    if (!user?.uid || !household || visitsLoading || isInitializing || visits === null) {
-      return;
-    }
-    
-    const initialVisits = visits || [];
-    const runInitialization = async () => {
-
-      const existingQuarters = new Set(
-        initialVisits.map((v) => {
-            if(getYear(new Date(v.visitDate)) === year) {
-                return getQuarter(new Date(v.visitDate));
-            }
-            return null;
-        }).filter(Boolean)
-      );
-      
-      const missingQuarters: number[] = [];
-
-      for (let qNum = 1; qNum <= 4; qNum++) {
-          if(!existingQuarters.has(qNum)) {
-            missingQuarters.push(qNum);
-          }
+    const initializeVisits = async () => {
+      if (!user?.uid || !firestore || visitsLoading || household === undefined) {
+        // Wait for user, firestore, and initial visit load to complete.
+        // Also wait if household is still loading (undefined).
+        return;
       }
-      
-      if (missingQuarters.length === 0) {
+
+      // If no household is registered, there's nothing to do.
+      if (household === null) {
         return;
       }
       
       setIsInitializing(true);
-
+      
       try {
-        const batch = writeBatch(firestore);
-        const visitsColRef = collection(
-          firestore,
-          `households/${user.uid}/followUpVisits`
+        const visitsColRef = collection(firestore, `households/${user.uid}/followUpVisits`);
+        const yearQuery = query(
+          visitsColRef,
+          where('visitDate', '>=', startOfYear(new Date(year, 0, 1)).toISOString()),
+          where('visitDate', '<=', endOfYear(new Date(year, 11, 31)).toISOString())
         );
 
-        missingQuarters.forEach((qNum) => {
-          const quarterDate = new Date(year, (qNum - 1) * 3 + 1, 15);
-          const newVisitRef = doc(visitsColRef);
-          const newVisitData: Omit<FollowUpVisit, 'childProgressUpdates'> = {
-            id: newVisitRef.id,
-            householdId: user.uid,
-            visitDate: formatISO(quarterDate),
-            visitType: qNum === 4 ? 'Annual' : 'Quarterly',
-            status: 'Pending',
-            visitedBy: '',
-            notes: '',
-          };
-          batch.set(newVisitRef, newVisitData);
-        });
+        const existingVisitsSnapshot = await getDocs(yearQuery);
+        const existingVisits = existingVisitsSnapshot.docs.map(d => d.data() as FollowUpVisit);
 
-        await batch.commit();
-        // Increment version to trigger re-fetch in useCollection
-        setDataVersion(prev => prev + 1); 
+        const existingQuarters = new Set(
+          existingVisits.map(v => getQuarter(new Date(v.visitDate)))
+        );
+
+        const missingQuarters: number[] = [];
+        for (let qNum = 1; qNum <= 4; qNum++) {
+          if (!existingQuarters.has(qNum)) {
+            missingQuarters.push(qNum);
+          }
+        }
+
+        if (missingQuarters.length > 0) {
+          const batch = writeBatch(firestore);
+          missingQuarters.forEach((qNum) => {
+            const quarterDate = new Date(year, (qNum - 1) * 3 + 1, 15);
+            const newVisitRef = doc(visitsColRef);
+            const newVisitData: Omit<FollowUpVisit, 'childProgressUpdates'> = {
+              id: newVisitRef.id,
+              householdId: user.uid,
+              visitDate: formatISO(quarterDate),
+              visitType: qNum === 4 ? 'Annual' : 'Quarterly',
+              status: 'Pending',
+              visitedBy: '',
+              notes: '',
+            };
+            batch.set(newVisitRef, newVisitData);
+          });
+          await batch.commit();
+          // Trigger a re-fetch by updating the dataVersion state
+          setDataVersion(prev => prev + 1);
+        }
       } catch (error) {
-        console.error('Failed to create missing follow-up visits:', error);
+        console.error('Failed to initialize follow-up visits:', error);
       } finally {
         setIsInitializing(false);
       }
     };
 
-    runInitialization();
-  }, [user, household, visits, year, visitsLoading, firestore, isInitializing]);
+    initializeVisits();
+  // We want this to run when user or year changes, or when the initial visit load completes.
+  }, [user, year, firestore, visitsLoading, household]);
+
 
   const quarters = useMemo(() => {
     if (!visits) return [];

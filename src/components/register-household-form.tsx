@@ -12,7 +12,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
-import { formatISO, addMonths } from 'date-fns';
+import { formatISO, addMonths, getYear } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -229,24 +229,26 @@ export function RegisterHouseholdForm() {
                 schoolName: child.schoolName || 'N/A',
             });
         });
-
+        
+        // Create the 4 quarterly visits for the current year
         const visitsColRef = collection(householdRef, 'followUpVisits');
-        const year = new Date().getFullYear();
+        const year = getYear(new Date());
 
         for (let qNum = 1; qNum <= 4; qNum++) {
-            const quarterDate = new Date(year, (qNum - 1) * 3, 15); // Mid-month of the start of the quarter
+            const quarterDate = new Date(year, (qNum - 1) * 3 + 1, 15); // Mid of the second month of the quarter
             const newVisitRef = doc(visitsColRef);
             const newVisitData: Omit<FollowUpVisit, 'childProgressUpdates'> = {
                 id: newVisitRef.id,
                 householdId: user.uid,
                 visitDate: formatISO(quarterDate),
-                visitType: qNum === 4 ? 'Annual' : 'Quarterly', // Example: Q4 is annual
+                visitType: qNum === 4 ? 'Annual' : 'Quarterly',
                 status: 'Pending',
                 visitedBy: '',
                 notes: '',
             };
             batch.set(newVisitRef, newVisitData);
         }
+
 
         await batch.commit();
 

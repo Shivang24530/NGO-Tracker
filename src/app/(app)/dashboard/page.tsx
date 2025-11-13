@@ -57,8 +57,8 @@ export default function Dashboard() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-                  <div className={`flex items-center justify-center h-8 w-8 rounded-lg bg-${stat.color.replace('bg-','text-')}/20`}>
-                    <stat.icon className={`h-5 w-5 ${stat.color.replace('bg-', 'text-')}`} />
+                  <div className={`flex items-center justify-center h-8 w-8 rounded-lg bg-primary/20`}>
+                    <stat.icon className={`h-5 w-5 text-primary`} />
                   </div>
                 </div>
               </CardHeader>
