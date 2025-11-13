@@ -80,6 +80,7 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
   const firestore = useFirestore();
   const [isLocating, setIsLocating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [childrenToDelete, setChildrenToDelete] = useState<string[]>([]);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -131,64 +132,22 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
     }
   };
 
-  const handleDeleteChild = async (index: number) => {
-    // Use the value stored in form values (this contains the DB id)
-    const childValue = form.getValues(`children.${index}`) as { id?: string; name?: string };
-  
-    // If there is no saved DB id - it's only in the UI -> remove locally
-    if (!childValue?.id) {
-      remove(index);
-      return;
+  const handleDeleteChild = (index: number) => {
+    const childValue = form.getValues(`children.${index}`);
+    
+    // If the child has an ID, it exists in the DB.
+    // Add its ID to the deletion queue.
+    if (childValue.id) {
+      setChildrenToDelete((prev) => [...prev, childValue.id!]);
     }
-  
-    const dbChildId = childValue.id;
-  
-    try {
-      // Sanity log for debugging
-      console.log('Deleting child doc', { householdId: household.id, childId: dbChildId });
-  
-      // Build explicit refs (clearer than passing a DocRef to collection)
-      const childDocRef = doc(firestore, 'households', household.id, 'children', dbChildId);
-      const progressUpdatesRef = collection(
-        firestore,
-        'households',
-        household.id,
-        'children',
-        dbChildId,
-        'childProgressUpdates'
-      );
-  
-      // Gather progress updates to delete
-      const progressUpdatesSnapshot = await getDocs(progressUpdatesRef);
-  
-      const batch = writeBatch(firestore);
-  
-      progressUpdatesSnapshot.forEach((d) => {
-        batch.delete(d.ref);
-      });
-  
-      // Delete child document
-      batch.delete(childDocRef);
-  
-      await batch.commit();
-  
-      // Remove from UI
-      remove(index);
-      toast({
-        title: 'Child Deleted',
-        description: `${childValue.name || 'Child'} has been removed from the family.`,
-      });
-    } catch (error: any) {
-      console.error('Error deleting child:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Deletion Failed',
-        description:
-          error?.message?.includes('permission-denied')
-            ? 'Permission denied. Make sure you are signed in as the household owner.'
-            : 'An error occurred while deleting the child. Please try again.',
-      });
-    }
+    
+    // Remove the child from the form UI.
+    remove(index);
+    
+    toast({
+        title: 'Child Removed',
+        description: `${childValue.name} will be deleted when you save changes.`,
+    });
   };
 
   async function onSubmit(values: FormData) {
@@ -198,7 +157,20 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
         const householdRef = doc(firestore, 'households', household.id);
         const childrenCollectionRef = collection(householdRef, 'children');
 
-        // 1. Update household doc
+        // 1. Handle Deletions
+        for (const childId of childrenToDelete) {
+            const childRef = doc(childrenCollectionRef, childId);
+            const progressUpdatesRef = collection(childRef, 'childProgressUpdates');
+            const progressUpdatesSnapshot = await getDocs(progressUpdatesRef);
+            
+            progressUpdatesSnapshot.forEach((progressDoc) => {
+                batch.delete(progressDoc.ref);
+            });
+
+            batch.delete(childRef);
+        }
+
+        // 2. Update household doc
         batch.update(householdRef, {
             familyName: values.familyName,
             fullAddress: values.fullAddress,
@@ -209,7 +181,7 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
             longitude: values.longitude,
         });
 
-        // 2. Handle children updates/additions
+        // 3. Handle children updates/additions
         values.children.forEach(child => {
             if (child.id) {
                 // Update existing child
@@ -314,7 +286,7 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
                         <AlertDialogHeader>
                             <AlertDialogTitle>Delete child?</AlertDialogTitle>
                             <AlertDialogDescription>
-                                Are you sure you want to remove <span className="font-semibold">{form.getValues(`children.${index}.name`)}</span>? This action is permanent and will delete all their progress records.
+                                Are you sure you want to remove <span className="font-semibold">{form.getValues(`children.${index}.name`)}</span>? This action will be permanent once you save changes.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
