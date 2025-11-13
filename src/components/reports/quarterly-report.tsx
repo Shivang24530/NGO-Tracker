@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useMemo } from 'react';
 import {
@@ -88,14 +89,17 @@ export function QuarterlyReport() {
       const start = startOfQuarter(quarterDate);
       const end = endOfQuarter(quarterDate);
 
-      const completedVisits = visits?.filter(v => 
+      const visitsInQuarter = visits?.filter(v => 
         v.status === 'Completed' && 
         isWithinInterval(new Date(v.visitDate), { start, end })
-      ).length ?? 0;
+      ) ?? [];
+
+      const completedHouseholds = new Set(visitsInQuarter.map(v => v.householdId));
+      const completedVisitsCount = completedHouseholds.size;
       
       const currentQuarter = getQuarter(now);
       const isOngoing = selectedYear === now.getFullYear() && q === currentQuarter;
-      const isCompleted = completedVisits >= totalFamilies;
+      const isCompleted = totalFamilies > 0 && completedVisitsCount >= totalFamilies;
 
       let status: 'Completed' | 'Ongoing' | 'Pending' = 'Pending';
       if (isCompleted) {
@@ -108,7 +112,7 @@ export function QuarterlyReport() {
         id: q,
         name: `Quarter ${q} (${start.toLocaleString('default', { month: 'short' })} - ${end.toLocaleString('default', { month: 'short' })})`,
         status,
-        completed: completedVisits,
+        completed: completedVisitsCount,
         total: totalFamilies,
       };
     });
