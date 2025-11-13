@@ -72,9 +72,9 @@ export default function MapOverviewPage() {
                         <AlertDescription>
                             <p>The Google Maps API key provided is not working. Please check the following:</p>
                             <ul className="list-disc pl-5 mt-2 space-y-1">
-                                <li>The API key in your <code>.env.local</code> file is correct.</li>
+                                <li>The API key in your <code>.env</code> file is correct and has no typos.</li>
                                 <li>The "Maps JavaScript API" is enabled in your Google Cloud Console.</li>
-                                <li>A billing account is linked to your Google Cloud project.</li>
+                                <li><b>A billing account is linked to your Google Cloud project.</b> Google Maps Platform products now require a valid billing account.</li>
                                 <li><b>Important:</b> The key's "Application restrictions" are set to "HTTP referrers" and your app's domain (e.g., <code>*.your-domain.com</code>) is on the allowed list to prevent unauthorized use.</li>
                             </ul>
                         </AlertDescription>
