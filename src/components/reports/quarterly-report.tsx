@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebase';
 import type { Household, FollowUpVisit, Child } from '@/lib/types';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, doc } from 'firebase/firestore';
 import Link from 'next/link';
 import { toast } from '@/hooks/use-toast';
 import { getQuarter, startOfQuarter, endOfQuarter, isWithinInterval } from 'date-fns';
@@ -90,11 +90,10 @@ export function QuarterlyReport() {
       const end = endOfQuarter(quarterDate);
 
       const visitsInQuarter = visits?.filter(v => 
-        v.status === 'Completed' && 
         isWithinInterval(new Date(v.visitDate), { start, end })
       ) ?? [];
 
-      const completedHouseholds = new Set(visitsInQuarter.map(v => v.householdId));
+      const completedHouseholds = new Set(visitsInQuarter.filter(v => v.status === 'Completed').map(v => v.householdId));
       const completedVisitsCount = completedHouseholds.size;
       
       const currentQuarter = getQuarter(now);
@@ -114,10 +113,10 @@ export function QuarterlyReport() {
         status,
         completed: completedVisitsCount,
         total: totalFamilies,
+        visits: visitsInQuarter,
       };
     });
   }, [year, visits, totalFamilies]);
-
 
   const getChildrenCount = (householdId: string) => {
     return children?.filter(c => c.householdId === householdId).length ?? 0;
@@ -135,18 +134,18 @@ export function QuarterlyReport() {
     }, 1500);
   };
   
-  const reportData = useMemoFirebase(() => {
+  const getHouseholdReportData = (quarterVisits: FollowUpVisit[]) => {
     if (!households) return [];
     return households.map(h => {
-        const visit = visits?.find(v => v.householdId === h.id);
+        const visitForHouseholdInQuarter = quarterVisits.find(v => v.householdId === h.id);
         return {
             ...h,
             childrenCount: getChildrenCount(h.id),
-            visitStatus: visit?.status || 'Pending',
+            visitStatus: visitForHouseholdInQuarter?.status || 'Pending',
+            visitId: visitForHouseholdInQuarter?.id,
         }
     })
-  }, [households, visits, children]);
-
+  };
 
   return (
     <div className="space-y-6">
@@ -169,8 +168,10 @@ export function QuarterlyReport() {
         </div>
       </Card>
       
-      <Accordion type="single" collapsible defaultValue="item-4">
-        {quarters.map((quarter) => (
+      <Accordion type="single" collapsible defaultValue={`item-${getQuarter(new Date())}`}>
+        {quarters.map((quarter) => {
+          const householdReportData = getHouseholdReportData(quarter.visits);
+          return (
           <AccordionItem value={`item-${quarter.id}`} key={quarter.id} className="bg-card border rounded-lg mb-2">
             <AccordionTrigger className="p-4 hover:no-underline">
               <div className="flex items-center gap-4 w-full">
@@ -236,7 +237,7 @@ export function QuarterlyReport() {
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    reportData.map(h => (
+                                    householdReportData.map(h => (
                                         <TableRow key={h.id}>
                                             <TableCell className="font-medium">{h.familyName}</TableCell>
                                             <TableCell>{h.locationArea}</TableCell>
@@ -250,8 +251,8 @@ export function QuarterlyReport() {
                                                 {h.visitStatus === "Completed" ? (
                                                     <CheckCircle2 className="h-5 w-5 text-green-600 ml-auto" />
                                                 ) : (
-                                                    <Button variant="ghost" size="sm" asChild>
-                                                        <Link href={`/follow-ups/TBD/conduct`}>
+                                                    <Button variant="ghost" size="sm" asChild disabled={!h.visitId}>
+                                                        <Link href={`/follow-ups/${h.visitId}/conduct?householdId=${h.id}`}>
                                                             <PenSquare className="mr-2 h-4 w-4"/>
                                                             Start Survey
                                                         </Link>
@@ -267,7 +268,8 @@ export function QuarterlyReport() {
                 </div>
             </AccordionContent>
           </AccordionItem>
-        ))}
+          )
+        })}
       </Accordion>
     </div>
   );

@@ -4,6 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
+import { useFirestore, useUser, setDocumentNonBlocking, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { collection, doc, writeBatch } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -59,6 +61,9 @@ type ConductVisitFormProps = {
 
 export function ConductVisitForm({ visit, household, children }: ConductVisitFormProps) {
   const router = useRouter();
+  const firestore = useFirestore();
+  const { user } = useUser();
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -86,15 +91,68 @@ export function ConductVisitForm({ visit, household, children }: ConductVisitFor
   const { watch } = form;
   const childrenUpdates = watch('childrenUpdates');
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values);
-    toast({
-      title: 'Visit Completed!',
-      description: `Survey for ${household.familyName} has been successfully submitted.`,
-    });
-    // In a real app, you would save this data to Firebase
-    // and then update the household's next_followup_due date.
-    router.push('/follow-ups');
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!user) {
+        toast({
+            variant: "destructive",
+            title: "Not Authenticated",
+            description: "You must be logged in to complete a visit.",
+        });
+        return;
+    }
+
+    try {
+        const batch = writeBatch(firestore);
+
+        // 1. Update Child Progress Updates
+        values.childrenUpdates.forEach(update => {
+            const progressUpdateRef = doc(collection(firestore, `households/${household.id}/children/${update.childId}/childProgressUpdates`));
+            batch.set(progressUpdateRef, {
+                id: progressUpdateRef.id,
+                childId: update.childId,
+                visitId: visit.id,
+                is_studying: update.isStudying,
+                not_studying_reason: update.notStudyingReason,
+                is_working: update.isWorking,
+                work_details: update.workDetails,
+                studying_challenges: update.studyingChallenges,
+            });
+
+            // Also update the child's main document
+            const childRef = doc(firestore, `households/${household.id}/children/${update.childId}`);
+            batch.update(childRef, { isStudying: update.isStudying });
+        });
+        
+        // 2. Update Household if it's an Annual visit
+        if (visit.visitType === 'Annual' && values.annualSurvey) {
+            const householdRef = doc(firestore, 'households', household.id);
+            batch.update(householdRef, { ...values.annualSurvey });
+        }
+
+        // 3. Update the FollowUpVisit status
+        const visitRef = doc(firestore, `households/${household.id}/followUpVisits`, visit.id);
+        batch.update(visitRef, {
+            status: 'Completed',
+            notes: values.notes,
+            visitedBy: user.displayName || 'Field Worker',
+        });
+        
+        await batch.commit();
+
+        toast({
+            title: 'Visit Completed!',
+            description: `Survey for ${household.familyName} has been successfully submitted.`,
+        });
+        router.push('/follow-ups');
+        router.refresh(); // To ensure the reports page gets fresh data
+    } catch (error) {
+        console.error("Error completing visit:", error);
+        toast({
+            variant: "destructive",
+            title: "Submission Failed",
+            description: "An error occurred while saving the visit data.",
+        });
+    }
   }
 
   return (
@@ -266,8 +324,10 @@ export function ConductVisitForm({ visit, household, children }: ConductVisitFor
                 />
             </CardContent>
         </Card>
-
-        <Button type="submit" size="lg" className="w-full font-headline">Complete Visit</Button>
+        <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
+            <Button type="submit" size="lg" className="font-headline">Complete Visit</Button>
+        </div>
       </form>
     </Form>
   );
