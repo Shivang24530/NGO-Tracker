@@ -132,48 +132,64 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
   };
 
   const handleDeleteChild = async (index: number) => {
-    const childToDelete = fields[index];
-    
-    // If child is not saved in DB yet, just remove from form
-    if (!childToDelete.id) {
-        remove(index);
-        return;
+    // Use the value stored in form values (this contains the DB id)
+    const childValue = form.getValues(`children.${index}`) as { id?: string; name?: string };
+  
+    // If there is no saved DB id - it's only in the UI -> remove locally
+    if (!childValue?.id) {
+      remove(index);
+      return;
     }
-
+  
+    const dbChildId = childValue.id;
+  
     try {
-      const childRef = doc(firestore, 'households', household.id, 'children', childToDelete.id);
-      const progressUpdatesQuery = query(collection(childRef, 'childProgressUpdates'));
-
+      // Sanity log for debugging
+      console.log('Deleting child doc', { householdId: household.id, childId: dbChildId });
+  
+      // Build explicit refs (clearer than passing a DocRef to collection)
+      const childDocRef = doc(firestore, 'households', household.id, 'children', dbChildId);
+      const progressUpdatesRef = collection(
+        firestore,
+        'households',
+        household.id,
+        'children',
+        dbChildId,
+        'childProgressUpdates'
+      );
+  
+      // Gather progress updates to delete
+      const progressUpdatesSnapshot = await getDocs(progressUpdatesRef);
+  
       const batch = writeBatch(firestore);
-
-      // 1. Get all progress updates to delete
-      const progressUpdatesSnapshot = await getDocs(progressUpdatesQuery);
-      progressUpdatesSnapshot.forEach(doc => {
-        batch.delete(doc.ref);
+  
+      progressUpdatesSnapshot.forEach((d) => {
+        batch.delete(d.ref);
       });
-
-      // 2. Delete the child document itself
-      batch.delete(childRef);
-
-      // 3. Commit all deletions atomically
+  
+      // Delete child document
+      batch.delete(childDocRef);
+  
       await batch.commit();
-
-      // 4. Remove from UI after successful DB deletion
+  
+      // Remove from UI
       remove(index);
       toast({
         title: 'Child Deleted',
-        description: `${childToDelete.name} has been removed from the family.`,
+        description: `${childValue.name || 'Child'} has been removed from the family.`,
       });
-
-    } catch (error) {
-        console.error("Error deleting child:", error);
-        toast({
-            variant: "destructive",
-            title: "Deletion Failed",
-            description: "An error occurred while deleting the child. Please check permissions and try again.",
-        });
+    } catch (error: any) {
+      console.error('Error deleting child:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Deletion Failed',
+        description:
+          error?.message?.includes('permission-denied')
+            ? 'Permission denied. Make sure you are signed in as the household owner.'
+            : 'An error occurred while deleting the child. Please try again.',
+      });
     }
-  }
+  };
 
   async function onSubmit(values: FormData) {
     setIsSubmitting(true);
