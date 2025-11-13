@@ -34,27 +34,37 @@ export default function MapOverviewPage() {
     const { data: followUpVisits, isLoading: visitsLoading } = useCollection<FollowUpVisit>(visitsQuery);
 
     useEffect(() => {
+        let isMounted = true;
+        
+        const fallbackToHouseholdLocation = () => {
+            if (isMounted && households && households.length > 0) {
+                setCenter({ lat: households[0].latitude, lng: households[0].longitude });
+            } else if (isMounted) {
+                setCenter({ lat: 28.7041, lng: 77.1025 });
+            }
+        };
+
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
-                    setCenter({ lat: position.coords.latitude, lng: position.coords.longitude });
+                    if (isMounted) {
+                        setCenter({ lat: position.coords.latitude, lng: position.coords.longitude });
+                    }
                 },
                 () => {
-                    // Could not get user location, will fall back to household location
-                    if (households && households.length > 0) {
-                        setCenter({ lat: households[0].latitude, lng: households[0].longitude });
-                    } else {
-                        // Fallback to default if no household either
-                        setCenter({ lat: 28.7041, lng: 77.1025 });
-                    }
+                    // Geolocation failed or denied, use fallback
+                    fallbackToHouseholdLocation();
                 }
             );
-        } else if (households && households.length > 0) {
-            setCenter({ lat: households[0].latitude, lng: households[0].longitude });
         } else {
-            setCenter({ lat: 28.7041, lng: 77.1025 });
+            // Geolocation not supported, use fallback
+            fallbackToHouseholdLocation();
         }
-    }, [households]);
+
+        return () => {
+            isMounted = false;
+        };
+    }, [households]); // Depends on households for fallback
 
     const householdsWithVisits = useMemo(() => {
         if (!households || !followUpVisits) return [];
