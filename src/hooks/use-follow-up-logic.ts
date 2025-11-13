@@ -31,17 +31,16 @@ import {
 export function useFollowUpLogic(year: number) {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
-  const [dataVersion, setDataVersion] = useState(0);
 
   const householdsQuery = useMemoFirebase(
     () => (firestore ? query(collection(firestore, 'households')) : null),
-    [firestore, dataVersion]
+    [firestore]
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
   const childrenQuery = useMemoFirebase(
     () => (firestore ? collectionGroup(firestore, 'children') : null),
-    [firestore, dataVersion]
+    [firestore]
   );
   const { data: children, isLoading: childrenLoading } = useCollection<Child>(childrenQuery);
   
@@ -62,12 +61,13 @@ export function useFollowUpLogic(year: number) {
             )
           )
         : null,
-    [firestore, year, dataVersion]
+    [firestore, year]
   );
 
   const {
     data: visits,
     isLoading: visitsLoading,
+    error: visitsError
   } = useCollection<FollowUpVisit>(visitsQuery);
 
   const [isInitializing, setIsInitializing] = useState(false);
@@ -124,7 +124,7 @@ export function useFollowUpLogic(year: number) {
     };
 
     const runInitialization = async () => {
-      if (!households || visitsLoading || isInitializing || householdsLoading) return;
+      if (!households || isInitializing || householdsLoading) return;
       
       setIsInitializing(true);
       let didUpdate = false;
@@ -132,16 +132,12 @@ export function useFollowUpLogic(year: number) {
         const updated = await initializeVisitsForHousehold(h);
         if (updated) didUpdate = true;
       }
-
-      if (didUpdate) {
-        setDataVersion(v => v + 1);
-      }
       setIsInitializing(false);
     };
 
     runInitialization();
 
-  }, [households, year, firestore, visitsLoading, isInitializing, householdsLoading]);
+  }, [households, year, firestore, isInitializing, householdsLoading]);
 
   const quarters = useMemo(() => {
     if (!visits || !households) return [];
@@ -166,8 +162,6 @@ export function useFollowUpLogic(year: number) {
         status = 'Partially Completed';
       }
       
-      const visit = households.length > 0 ? visitsForQuarter.find(v => v.householdId === households[0]?.id) : undefined;
-      
       return {
         id: qNum,
         name: `Quarter ${qNum} (${start.toLocaleString('default', {
@@ -177,12 +171,11 @@ export function useFollowUpLogic(year: number) {
         completed: completedCount,
         total: totalCount,
         visits: visitsForQuarter,
-        visit: visit,
       };
     });
   }, [year, visits, households]);
 
-  const isLoading = isUserLoading || householdsLoading || visitsLoading || isInitializing;
+  const isLoading = isUserLoading || householdsLoading || visitsLoading || childrenLoading || isInitializing;
 
   return { quarters, households, children, visits, isLoading };
 }

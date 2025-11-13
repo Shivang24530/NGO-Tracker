@@ -39,21 +39,20 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { getQuarter, format, isPast, getYear } from 'date-fns';
 import { useFollowUpLogic } from '@/hooks/use-follow-up-logic';
-import { getDocs, collection, query, where } from 'firebase/firestore';
+import { getDocs, collection, query, where, Firestore } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import type { ChildProgressUpdate } from '@/lib/types';
 
 
-export function QuarterlyReport() {
+function QuarterlyReportContent({ firestore }: { firestore: Firestore }) {
   const [year, setYear] = useState(new Date().getFullYear());
   const [isDownloading, setIsDownloading] = useState(false);
-  const firestore = useFirestore();
   const router = useRouter();
 
-  const { quarters, household, children, isLoading } = useFollowUpLogic(year);
+  const { quarters, households, children, isLoading } = useFollowUpLogic(year);
   
   const handleDownload = async (quarterId: number) => {
-    if (!household || !children || !firestore) {
+    if (!households || !children || !firestore) {
       toast({
         variant: 'destructive',
         title: 'Cannot Download',
@@ -75,7 +74,13 @@ export function QuarterlyReport() {
         return;
       }
   
-      const visit = quarter.visit;
+      const household = households[0]; // Assuming one household for this simplified view.
+      if (!household) {
+        toast({ variant: 'destructive', title: 'Household not found' });
+        return;
+      }
+      
+      const visit = quarter.visits.find(v => v.householdId === household.id);
       if (!visit) {
          toast({ variant: 'destructive', title: 'Visit not found' });
          return;
@@ -86,7 +91,7 @@ export function QuarterlyReport() {
       
       for (const child of children) {
           const progressUpdatesRef = collection(firestore, `households/${household.id}/children/${child.id}/childProgressUpdates`);
-          const q = query(progressUpdatesRef, where('visitId', '==', visit.id));
+          const q = query(progressUpdatesRef, where('visit_id', '==', visit.id));
           const querySnapshot = await getDocs(q);
           if (!querySnapshot.empty) {
               // Assuming one progress update per child per visit
@@ -188,13 +193,17 @@ export function QuarterlyReport() {
       >
         {quarters.map((quarter) => {
           const completionPercentage =
-            isLoading || !household
+            isLoading || !households
               ? 0
               : (quarter.completed / quarter.total) * 100;
 
           const isPastQuarter = year < currentYear || (year === currentYear && quarter.id < currentQuarterNum);
-          const isSurveyActionable = quarter.visit?.status !== 'Completed' && !isPastQuarter;
-          const visitStatus = quarter.visit?.status || 'Pending';
+          
+          const household = households ? households[0] : null;
+          const visit = household ? quarter.visits.find(v => v.householdId === household.id) : null;
+          const visitStatus = visit?.status || 'Pending';
+          const isSurveyActionable = visitStatus !== 'Completed' && !isPastQuarter;
+
 
           return (
             <AccordionItem
@@ -214,7 +223,7 @@ export function QuarterlyReport() {
                         <CheckCircle2 className="mr-1 h-3 w-3" />
                         Completed
                       </Badge>
-                    ) : isPastQuarter ? (
+                    ) : isPastQuarter && quarter.status !== 'Completed' ? (
                        <Badge
                         variant="secondary"
                         className="bg-red-100 text-red-800 border-red-200"
@@ -249,7 +258,7 @@ export function QuarterlyReport() {
                   <div className="flex justify-end mb-4">
                     <Button
                       onClick={() => handleDownload(quarter.id)}
-                      disabled={isDownloading || !household || quarter.completed === 0}
+                      disabled={isDownloading || !households || quarter.completed === 0}
                       className="bg-green-600 text-white hover:bg-green-700"
                     >
                       {isDownloading ? (
@@ -280,66 +289,64 @@ export function QuarterlyReport() {
                               <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                             </TableCell>
                           </TableRow>
-                        ) : household ? (
-                          <TableRow key={household.id}>
-                            <TableCell className="font-medium">
-                              {household.familyName}
-                            </TableCell>
-                            <TableCell>{household.locationArea}</TableCell>
-                            <TableCell>{children?.length ?? 0}</TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={
-                                  visitStatus === 'Completed'
-                                    ? 'default'
-                                    : 'secondary'
-                                }
-                                className={
-                                  visitStatus === 'Completed'
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-yellow-100 text-yellow-800'
-                                }
-                              >
-                                {visitStatus}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {visitStatus === 'Completed' ? (
-                                <div className="flex items-center justify-end text-green-600">
-                                  <CheckCircle2 className="h-5 w-5 ml-auto" />
-                                </div>
-                              ) : isSurveyActionable ? (
-                                quarter.visit?.id ? (
-                                  (() => {
-                                    const href = `/households/${encodeURIComponent(household.id)}/follow-ups/${encodeURIComponent(quarter.visit.id)}/conduct`;
-                                    return (
+                        ) : households && households.length > 0 ? (
+                          households.map(household => {
+                            const visit = quarter.visits.find(v => v.householdId === household.id);
+                            const visitStatus = visit?.status || 'Pending';
+                            const isActionable = visitStatus !== 'Completed' && !isPastQuarter;
+                            const householdChildren = children?.filter(c => c.householdId === household.id) || [];
+
+                            return (
+                               <TableRow key={household.id}>
+                                <TableCell className="font-medium">
+                                  {household.familyName}
+                                </TableCell>
+                                <TableCell>{household.locationArea}</TableCell>
+                                <TableCell>{householdChildren.length}</TableCell>
+                                <TableCell>
+                                  <Badge
+                                    variant={
+                                      visitStatus === 'Completed'
+                                        ? 'default'
+                                        : 'secondary'
+                                    }
+                                    className={
+                                      visitStatus === 'Completed'
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-yellow-100 text-yellow-800'
+                                    }
+                                  >
+                                    {visitStatus}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {visitStatus === 'Completed' ? (
+                                    <div className="flex items-center justify-end text-green-600">
+                                      <CheckCircle2 className="h-5 w-5 ml-auto" />
+                                    </div>
+                                  ) : isActionable && visit ? (
                                       <Button
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => {
-                                          console.log('Navigating to', href);
-                                          router.push(href);
+                                          router.push(`/households/${household.id}/follow-ups/${visit.id}/conduct`);
                                         }}
                                       >
                                         <PenSquare className="mr-2 h-4 w-4" />
                                         Start Survey
                                       </Button>
-                                    );
-                                  })()
-                                ) : (
-                                  <Button variant="ghost" size="sm" disabled>
-                                    <PenSquare className="mr-2 h-4 w-4" />
-                                    Start Survey
-                                  </Button>
-                                )
-                              ) : (
-                                <span className="text-sm text-muted-foreground italic">Survey period ended</span>
-                              )}
-                            </TableCell>
-                          </TableRow>
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground italic">
+                                        { isPastQuarter && visitStatus !== 'Completed' ? 'Survey period ended' : '...'}
+                                    </span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
                         ) : (
                            <TableRow>
-                             <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">No family registered for this account.</TableCell>
+                             <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">No families registered in the system.</TableCell>
                            </TableRow>
                         )}
                       </TableBody>
@@ -353,4 +360,18 @@ export function QuarterlyReport() {
       </Accordion>
     </div>
   );
+}
+
+export function QuarterlyReport() {
+    const firestore = useFirestore();
+
+    if (!firestore) {
+        return (
+            <div className="flex w-full items-center justify-center p-8">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            </div>
+        );
+    }
+    
+    return <QuarterlyReportContent firestore={firestore} />;
 }
