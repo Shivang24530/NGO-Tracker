@@ -30,6 +30,7 @@ export function useFollowUpLogic(year: number) {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
   const [isInitializing, setIsInitializing] = useState(false);
+  const [dataVersion, setDataVersion] = useState(0); // State to trigger re-fetch
 
   const householdRef = useMemoFirebase(
     () => (user?.uid ? doc(firestore, 'households', user.uid) : null),
@@ -48,7 +49,6 @@ export function useFollowUpLogic(year: number) {
   const { data: children, isLoading: childrenLoading } =
     useCollection<Child>(childrenQuery);
 
-  // This query fetches all visits for the selected year.
   const visitsQuery = useMemoFirebase(
     () =>
       user?.uid
@@ -66,7 +66,7 @@ export function useFollowUpLogic(year: number) {
             )
           )
         : null,
-    [firestore, user, year]
+    [firestore, user, year, dataVersion] // Add dataVersion to deps
   );
 
   const {
@@ -75,31 +75,35 @@ export function useFollowUpLogic(year: number) {
     error: visitsError,
   } = useCollection<FollowUpVisit>(visitsQuery);
 
-  // This effect is the core fix. It ensures that visit documents exist for all quarters.
   useEffect(() => {
-    // Only run if we have a user, a household, and the initial visit load is complete.
     if (!user?.uid || !household || visitsLoading || isInitializing || visits === null) {
       return;
     }
-
+    
+    const initialVisits = visits || [];
     const runInitialization = async () => {
+
       const existingQuarters = new Set(
-        visits.map((v) => getQuarter(new Date(v.visitDate)))
+        initialVisits.map((v) => {
+            if(getYear(new Date(v.visitDate)) === year) {
+                return getQuarter(new Date(v.visitDate));
+            }
+            return null;
+        }).filter(Boolean)
       );
+      
       const missingQuarters: number[] = [];
 
       for (let qNum = 1; qNum <= 4; qNum++) {
-        if (!existingQuarters.has(qNum)) {
-          missingQuarters.push(qNum);
-        }
+          if(!existingQuarters.has(qNum)) {
+            missingQuarters.push(qNum);
+          }
       }
       
-      // If all quarters have visits, do nothing.
       if (missingQuarters.length === 0) {
         return;
       }
       
-      // Prevent re-running while batch is in progress
       setIsInitializing(true);
 
       try {
@@ -110,7 +114,7 @@ export function useFollowUpLogic(year: number) {
         );
 
         missingQuarters.forEach((qNum) => {
-          const quarterDate = new Date(year, (qNum - 1) * 3 + 1, 15); // Mid-month of the middle of the quarter
+          const quarterDate = new Date(year, (qNum - 1) * 3 + 1, 15);
           const newVisitRef = doc(visitsColRef);
           const newVisitData: Omit<FollowUpVisit, 'childProgressUpdates'> = {
             id: newVisitRef.id,
@@ -125,7 +129,8 @@ export function useFollowUpLogic(year: number) {
         });
 
         await batch.commit();
-        // The useCollection hook will automatically pick up the new documents.
+        // Increment version to trigger re-fetch in useCollection
+        setDataVersion(prev => prev + 1); 
       } catch (error) {
         console.error('Failed to create missing follow-up visits:', error);
       } finally {
@@ -137,7 +142,6 @@ export function useFollowUpLogic(year: number) {
   }, [user, household, visits, year, visitsLoading, firestore, isInitializing]);
 
   const quarters = useMemo(() => {
-    // If visits are still loading or not yet available, return an empty array.
     if (!visits) return [];
 
     return [1, 2, 3, 4].map((qNum) => {
@@ -145,9 +149,8 @@ export function useFollowUpLogic(year: number) {
       const start = startOfQuarter(quarterDate);
       const end = endOfQuarter(quarterDate);
 
-      // Find the specific visit document for this quarter.
       const visitForQuarter = visits.find(
-        (v) => getQuarter(new Date(v.visitDate)) === qNum
+        (v) => getQuarter(new Date(v.visitDate)) === qNum && getYear(new Date(v.visitDate)) === year
       );
 
       const isCompleted = visitForQuarter?.status === 'Completed';
@@ -157,7 +160,7 @@ export function useFollowUpLogic(year: number) {
         status = 'Completed';
       }
 
-      const total = 1; // Always 1 family
+      const total = 1;
       const completedCount = isCompleted ? 1 : 0;
 
       return {
@@ -168,7 +171,7 @@ export function useFollowUpLogic(year: number) {
         status,
         completed: completedCount,
         total: total,
-        visit: visitForQuarter, // This will be undefined if no visit doc exists yet, but the useEffect will create it.
+        visit: visitForQuarter,
       };
     });
   }, [year, visits]);
