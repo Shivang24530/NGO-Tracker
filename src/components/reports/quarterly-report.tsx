@@ -36,25 +36,121 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from '@/hooks/use-toast';
-import { getQuarter } from 'date-fns';
+import { getQuarter, format } from 'date-fns';
 import { useFollowUpLogic } from '@/hooks/use-follow-up-logic';
+import { getDocs, collection, query, where } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
+import type { ChildProgressUpdate } from '@/lib/types';
+
 
 export function QuarterlyReport() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [isDownloading, setIsDownloading] = useState(false);
+  const firestore = useFirestore();
 
   const { quarters, household, children, isLoading } = useFollowUpLogic(year);
 
-  const handleDownload = (quarterId: number) => {
+  const handleDownload = async (quarterId: number) => {
+    if (!household || !children || !firestore) {
+      toast({
+        variant: 'destructive',
+        title: 'Cannot Download',
+        description: 'No data available to generate the report.',
+      });
+      return;
+    }
+  
     setIsDownloading(true);
-    // Simulate CSV generation and download
-    setTimeout(() => {
-      setIsDownloading(false);
+  
+    try {
+      const quarter = quarters.find((q) => q.id === quarterId);
+      if (!quarter || !quarter.visit || quarter.visit.status !== 'Completed') {
+        toast({
+          variant: 'destructive',
+          title: 'Report Not Ready',
+          description: 'The survey for this quarter must be completed to download the report.',
+        });
+        return;
+      }
+  
+      const visit = quarter.visit;
+  
+      // Fetch all child progress updates for this specific visit
+      const progressUpdatesByChild: { [childId: string]: ChildProgressUpdate } = {};
+      
+      for (const child of children) {
+          const progressUpdatesRef = collection(firestore, `households/${household.id}/children/${child.id}/childProgressUpdates`);
+          const q = query(progressUpdatesRef, where('visitId', '==', visit.id));
+          const querySnapshot = await getDocs(q);
+          if (!querySnapshot.empty) {
+              // Assuming one progress update per child per visit
+              progressUpdatesByChild[child.id] = querySnapshot.docs[0].data() as ChildProgressUpdate;
+          }
+      }
+      
+  
+      // Define CSV headers
+      const headers = [
+        'Family Name',
+        'Location',
+        'Child Name',
+        'Age',
+        'Gender',
+        'Studying?',
+        'Reason Not Studying',
+        'Working?',
+        'Work Details',
+        'Study Challenges',
+        'Visit Date',
+        'Visited By',
+      ];
+  
+      const rows = children.map((child) => {
+        const progress = progressUpdatesByChild[child.id];
+        
+        return [
+          household.familyName,
+          household.locationArea,
+          child.name,
+          child.age,
+          child.gender,
+          progress ? (progress.is_studying ? 'Yes' : 'No') : 'N/A',
+          progress && !progress.is_studying ? progress.not_studying_reason || '' : '',
+          progress ? (progress.is_working ? 'Yes' : 'No') : 'N/A',
+          progress && progress.is_working ? progress.work_details || '' : '',
+          progress ? progress.studying_challenges || '' : '',
+          visit ? format(new Date(visit.visitDate), 'yyyy-MM-dd') : '',
+          visit ? visit.visitedBy : '',
+        ].map(value => `"${String(value ?? '').replace(/"/g, '""')}"`); // Escape quotes
+      });
+  
+      const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+      
+      // Create a blob and trigger download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `Q${quarterId}_${year}_Report.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+  
       toast({
         title: 'Report Downloaded',
         description: `Q${quarterId} ${year} report has been successfully generated.`,
       });
-    }, 1500);
+  
+    } catch (error) {
+      console.error('Failed to generate report:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Download Failed',
+        description: 'An error occurred while generating the report.',
+      });
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const getChildrenCount = (householdId: string) => {
@@ -152,7 +248,7 @@ export function QuarterlyReport() {
                   <div className="flex justify-end mb-4">
                     <Button
                       onClick={() => handleDownload(quarter.id)}
-                      disabled={isDownloading || !household}
+                      disabled={isDownloading || !household || quarter.status !== 'Completed'}
                       className="bg-green-600 text-white hover:bg-green-700"
                     >
                       {isDownloading ? (
