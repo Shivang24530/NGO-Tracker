@@ -9,26 +9,23 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Checks if the user is the owner of the household document.
-    function isOwner(resource) {
-      return isSignedIn() && request.auth.uid == resource.data.ownerId;
+    // Checks if the user is the owner of the provided document.
+    // The `doc` parameter is the result of a get() call or the `resource` variable.
+    function isOwner(doc) {
+      return isSignedIn() && request.auth.uid == doc.data.ownerId;
     }
 
     // households/{householdId}
     match /households/{householdId} {
-      // Any authenticated user can create a household.
-      // The new household document must have an `ownerId` field set to the user's UID.
+      // Any authenticated user can create a household, as long as they are the owner.
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       
-      // Any authenticated user can list the households collection.
-      // Important for displaying all households on the main pages.
-      allow list: if isSignedIn();
+      // Allow any authenticated user to query the households collection,
+      // as long as the query is filtered by their ownerId.
+      allow list: if isSignedIn() && request.auth.uid == request.query.filters.ownerId.string_value;
 
-      // Users can read any single household document.
-      allow get: if isSignedIn();
-
-      // Only the owner can update or delete their household document.
-      allow update, delete: if isOwner(resource);
+      // Only the owner can get, update or delete their household document.
+      allow get, update, delete: if isOwner(resource);
       
       // Children subcollection
       match /children/{childId} {
@@ -49,12 +46,13 @@ service cloud.firestore {
       }
     }
 
-    // Rule for collection group query on 'children'.
-    // This rule allows a user to list all children across all households
-    // IF they are the owner of the parent household for each child.
+    // This rule allows a user to perform a collection group query on 'children'
+    // ONLY if the query is filtered to their own households. This is not
+    // directly enforceable in rules for 'list', so the app MUST apply the
+    // where('ownerId', '==', request.auth.uid) filter on the parent collection.
+    // The 'read' rule here secures direct gets to child documents via a collection group query.
     match /{path=**}/children/{childId} {
-      allow list: if get(/databases/$(database)/documents/households/$(path[1])).data.ownerId == request.auth.uid;
-      allow read: if isOwner(get(path.slice(0, path.lastIndexOf('/children'))));
+      allow read: if isOwner(get(/databases/$(database)/documents/households/$(path[1])));
     }
   }
 }
