@@ -28,6 +28,8 @@ import {
   endOfYear,
   getYear,
   formatISO,
+  parseISO,
+  isWithinInterval,
 } from 'date-fns';
 
 export function useFollowUpLogic(year: number) {
@@ -190,102 +192,147 @@ export function useFollowUpLogic(year: number) {
   const quarters = useMemo(() => {
     if (!households) return [];
 
-    const getProgressForQuarter = (visitIds: Set<string>) => {
-        return allProgressUpdates.filter(p => visitIds.has(p.visit_id));
+    // helper: parse createdAt / visitDate values to Date safely
+    const parseDateSafe = (val: any): Date | null => {
+      if (!val) return null;
+      // Firestore Timestamp
+      if (typeof val === 'object' && typeof (val as any).toDate === 'function') {
+        return (val as any).toDate();
+      }
+      // ISO string
+      if (typeof val === 'string') {
+        try {
+          return parseISO(val);
+        } catch {
+          return null;
+        }
+      }
+      // native Date
+      if (val instanceof Date) return val;
+      return null;
     };
 
+    // helper to get progress updates for a set of visit ids
+    const getProgressForQuarter = (visitIds: Set<string>) =>
+      allProgressUpdates.filter(p => visitIds.has(p.visit_id));
+
+    // We'll build one entry per quarter
     return [1, 2, 3, 4].map((qNum) => {
-        const quarterDate = new Date(year, (qNum - 1) * 3, 1);
-        const start = startOfQuarter(quarterDate);
-        const end = endOfQuarter(quarterDate);
+      // quarter start/end (Dates)
+      const quarterDate = new Date(year, (qNum - 1) * 3, 1);
+      const start = startOfQuarter(quarterDate);
+      const end = endOfQuarter(quarterDate);
 
-        // **LOGIC FIX:** Only count households that were created by the end of this quarter.
-        const householdsInQuarter = households.filter(h => new Date(h.createdAt) <= end);
-        const householdIdsInQuarter = new Set(householdsInQuarter.map(h => h.id));
-        
-        const totalCount = householdIdsInQuarter.size;
+      // Determine households that existed on or before `end`
+      const householdsInQuarter = households.filter(h => {
+        const created = parseDateSafe(h.createdAt);
+        if (!created) {
+          // If createdAt is missing, treat as: (a) decide fallback policy.
+          // We'll treat missing createdAt as "created now" to avoid retroactively
+          // adding them to past quarters. If you want the opposite (treat
+          // missing as very old), change to `new Date(0)`.
+          return false; // exclude unknown-created households from past quarters
+        }
+        return created <= end;
+      });
 
-        const visitsForQuarter = allVisits.filter((v) => {
-            const visitDate = new Date(v.visitDate);
-            return householdIdsInQuarter.has(v.householdId) && visitDate >= start && visitDate <= end;
+      const householdIdsInQuarter = new Set(householdsInQuarter.map(h => h.id));
+      const totalCount = householdIdsInQuarter.size;
+
+      // visits that belong to households in this quarter and whose visitDate falls within start..end
+      const visitsForQuarter = allVisits.filter((v) => {
+        const visitDate = parseDateSafe(v.visitDate);
+        if (!visitDate) return false;
+        return householdIdsInQuarter.has(v.householdId) && isWithinInterval(visitDate, { start, end });
+      });
+
+      const completedCount = visitsForQuarter.filter(v => v.status === 'Completed').length;
+
+      // status logic
+      let status: 'Completed' | 'Pending' | 'Partially Completed' = 'Pending';
+      if (totalCount === 0) {
+        status = 'Pending';
+      } else if (completedCount === totalCount) {
+        status = 'Completed';
+      } else if (completedCount > 0) {
+        status = 'Partially Completed';
+      }
+
+      // progress comparison (improved/declined/noChange) vs previous quarter
+      let improved = 0;
+      let declined = 0;
+      let noChange = 0;
+
+      // current quarter progress
+      const currentVisitIds = new Set(visitsForQuarter.map(v => v.id));
+      const currentQuarterProgress = getProgressForQuarter(currentVisitIds);
+
+      const childrenInQuarter = allChildren.filter(child => householdIdsInQuarter.has(child.householdId));
+
+      if (qNum > 1) {
+        // previous quarter interval
+        const prevQuarterDate = new Date(year, (qNum - 2) * 3, 1);
+        const prevStart = startOfQuarter(prevQuarterDate);
+        const prevEnd = endOfQuarter(prevQuarterDate);
+
+        const householdsInPrevQuarter = households.filter(h => {
+          const created = parseDateSafe(h.createdAt);
+          if (!created) {
+            return false;
+          }
+          return created <= prevEnd;
         });
 
-        const completedCount = visitsForQuarter.filter(v => v.status === 'Completed').length;
-        
-        let status: 'Completed' | 'Pending' | 'Partially Completed' = 'Pending';
-        if (totalCount === 0) {
-            status = 'Pending';
-        } else if (totalCount > 0 && completedCount === totalCount) {
-            status = 'Completed';
-        } else if (completedCount > 0) {
-            status = 'Partially Completed';
-        }
+        const householdIdsInPrevQuarter = new Set(householdsInPrevQuarter.map(h => h.id));
 
-        let improved = 0;
-        let declined = 0;
-        let noChange = 0;
+        const prevVisitsForQuarter = allVisits.filter(v => {
+          const visitDate = parseDateSafe(v.visitDate);
+          if (!visitDate) return false;
+          return householdIdsInPrevQuarter.has(v.householdId) && isWithinInterval(visitDate, { start: prevStart, end: prevEnd });
+        });
 
-        const currentVisitIds = new Set(visitsForQuarter.map(v => v.id));
-        const currentQuarterProgress = getProgressForQuarter(currentVisitIds);
-        
-        const childrenInQuarter = allChildren.filter(child => householdIdsInQuarter.has(child.householdId));
+        const prevVisitIds = new Set(prevVisitsForQuarter.map(v => v.id));
+        const previousQuarterProgress = getProgressForQuarter(prevVisitIds);
 
-        if (qNum > 1) {
-            const prevQuarterDate = new Date(year, (qNum - 2) * 3, 1);
-            const prevStart = startOfQuarter(prevQuarterDate);
-            const prevEnd = endOfQuarter(prevQuarterDate);
-            
-            const householdsInPrevQuarter = households.filter(h => new Date(h.createdAt) <= prevEnd);
-            const householdIdsInPrevQuarter = new Set(householdsInPrevQuarter.map(h => h.id));
+        const currentProgressByChild = new Map(currentQuarterProgress.map(p => [p.child_id, p]));
+        const previousProgressByChild = new Map(previousQuarterProgress.map(p => [p.child_id, p]));
 
-            const prevVisitsForQuarter = allVisits.filter(v => {
-                const visitDate = new Date(v.visitDate);
-                return householdIdsInPrevQuarter.has(v.householdId) && visitDate >= prevStart && visitDate <= prevEnd;
-            });
-            const prevVisitIds = new Set(prevVisitsForQuarter.map(v => v.id));
-            const previousQuarterProgress = getProgressForQuarter(prevVisitIds);
+        childrenInQuarter.forEach(child => {
+          const current = currentProgressByChild.get(child.id);
+          const previous = previousProgressByChild.get(child.id);
 
-            const currentProgressByChild = new Map(currentQuarterProgress.map(p => [p.child_id, p]));
-            const previousProgressByChild = new Map(previousQuarterProgress.map(p => [p.child_id, p]));
+          if (current && previous) {
+            if (current.is_studying && !previous.is_studying) {
+              improved++;
+            } else if (!current.is_studying && previous.is_studying) {
+              declined++;
+            } else {
+              noChange++;
+            }
+          }
+        });
+      }
 
-            childrenInQuarter.forEach(child => {
-                const current = currentProgressByChild.get(child.id);
-                const previous = previousProgressByChild.get(child.id);
+      const childrenWithData = new Set(currentQuarterProgress.map(p => p.child_id));
+      const notRecorded = childrenInQuarter.length - childrenWithData.size;
 
-                if (current && previous) {
-                    if (current.is_studying && !previous.is_studying) {
-                        improved++;
-                    } else if (!current.is_studying && previous.is_studying) {
-                        declined++;
-                    } else {
-                        noChange++;
-                    }
-                }
-            });
-        }
-        
-        const childrenWithData = new Set(currentQuarterProgress.map(p => p.child_id));
-        const notRecorded = childrenInQuarter.length - childrenWithData.size;
-
-        return {
-            id: qNum,
-            name: `Quarter ${qNum} (${start.toLocaleString('default', { month: 'short' })} - ${end.toLocaleString('default', { month: 'short' })})`,
-            status,
-            completed: completedCount,
-            total: totalCount,
-            visits: visitsForQuarter,
-            improved,
-            declined,
-            noChange,
-            notRecorded,
-        };
+      return {
+        id: qNum,
+        name: `Quarter ${qNum} (${start.toLocaleString('default', { month: 'short' })} - ${end.toLocaleString('default', { month: 'short' })})`,
+        status,
+        completed: completedCount,
+        total: totalCount,
+        visits: visitsForQuarter,
+        improved,
+        declined,
+        noChange,
+        notRecorded,
+      };
     });
-}, [year, allVisits, households, allChildren, allProgressUpdates]);
+  }, [year, allVisits, households, allChildren, allProgressUpdates]);
 
 
   const isLoading = isUserLoading || householdsLoading || visitsLoading || childrenLoading || progressUpdatesLoading;
 
   return { quarters, households, children: allChildren, visits: allVisits, progressUpdates: allProgressUpdates, isLoading };
 }
-
-    
