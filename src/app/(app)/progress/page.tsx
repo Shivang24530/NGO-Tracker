@@ -33,8 +33,8 @@ export default function ProgressTrackingPage() {
   const [childrenLoading, setChildrenLoading] = useState(true);
 
   const householdsQuery = useMemoFirebase(
-    () => (firestore && user ? query(collection(firestore, 'households'), where('ownerId', '==', user.uid)) : null),
-    [firestore, user]
+    () => (firestore ? query(collection(firestore, 'households')) : null),
+    [firestore]
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
@@ -43,11 +43,11 @@ export default function ProgressTrackingPage() {
       setChildrenLoading(true);
       return;
     }
-
+    
     if (households.length === 0) {
-      setAllChildren([]);
-      setChildrenLoading(false);
-      return;
+        setAllChildren([]);
+        setChildrenLoading(false);
+        return;
     }
 
     const fetchAllChildren = async () => {

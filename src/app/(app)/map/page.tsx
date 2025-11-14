@@ -24,13 +24,13 @@ export default function MapOverviewPage() {
     const [visitsLoading, setVisitsLoading] = useState(true);
 
     const householdsQuery = useMemoFirebase(
-      () => (firestore && user ? query(collection(firestore, 'households'), where('ownerId', '==', user.uid)) : null),
-      [firestore, user]
+      () => (firestore ? query(collection(firestore, 'households')) : null),
+      [firestore]
     );
     const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
     useEffect(() => {
-        if (!firestore || households === null) {
+        if (households === null) {
             setVisitsLoading(true);
             return;
         }
@@ -42,6 +42,7 @@ export default function MapOverviewPage() {
         }
 
         const fetchAllVisits = async () => {
+            if (!firestore) return;
             setVisitsLoading(true);
             try {
                 const visitsPromises = households.map(h => 

@@ -34,8 +34,8 @@ export function useFollowUpLogic(year: number) {
   const { user, isUserLoading } = useUser();
 
   const householdsQuery = useMemoFirebase(
-    () => (firestore && user ? query(collection(firestore, 'households'), where('ownerId', '==', user.uid)) : null),
-    [firestore, user]
+    () => (firestore ? query(collection(firestore, 'households')) : null),
+    [firestore]
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
@@ -46,7 +46,7 @@ export function useFollowUpLogic(year: number) {
 
   // Effect for fetching nested children and visits data
   useEffect(() => {
-    if (!firestore || households === null) {
+    if (households === null) {
       setChildrenLoading(true);
       setVisitsLoading(true);
       return;

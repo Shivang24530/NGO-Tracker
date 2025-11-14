@@ -49,8 +49,8 @@ export default function AllHouseholdsPage() {
   const router = useRouter();
 
   const householdsQuery = useMemoFirebase(
-    () => (firestore && user ? query(collection(firestore, 'households'), where('ownerId', '==', user.uid)) : null),
-    [firestore, user]
+    () => (firestore ? query(collection(firestore, 'households')) : null),
+    [firestore]
   );
   
   const { data: households, isLoading } = useCollection<Household>(householdsQuery);

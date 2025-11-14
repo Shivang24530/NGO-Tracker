@@ -28,13 +28,13 @@ export default function AnalyticsPage() {
   const [childrenLoading, setChildrenLoading] = useState(true);
 
   const householdsQuery = useMemoFirebase(
-    () => (firestore && user ? query(collection(firestore, 'households'), where('ownerId', '==', user.uid)) : null),
-    [firestore, user]
+    () => (firestore ? query(collection(firestore, 'households')) : null),
+    [firestore]
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
   useEffect(() => {
-    if (!firestore || households === null) {
+    if (households === null) {
       setChildrenLoading(true);
       return;
     }
@@ -46,6 +46,7 @@ export default function AnalyticsPage() {
     }
       
     const fetchAllChildren = async () => {
+      if (!firestore) return;
       setChildrenLoading(true);
       try {
         const childrenPromises = households.map(h => 
