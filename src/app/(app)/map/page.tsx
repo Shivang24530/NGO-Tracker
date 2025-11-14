@@ -24,8 +24,8 @@ export default function MapOverviewPage() {
     const [visitsLoading, setVisitsLoading] = useState(true);
 
     const householdsQuery = useMemoFirebase(
-      () => (firestore ? query(collection(firestore, 'households')) : null),
-      [firestore]
+      () => (firestore && user ? query(collection(firestore, 'households'), where('ownerId', '==', user.uid)) : null),
+      [firestore, user]
     );
     const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
