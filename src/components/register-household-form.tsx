@@ -67,12 +67,6 @@ const formSchema = z.object({
 
   // Step 2
   children: z.array(childSchema),
-
-  // Step 3
-  familyPhotoFile: z.any().optional(),
-  housePhotoFile: z.any().optional(),
-  familyPhotoUrl: z.string().optional(), // For displaying preview
-  housePhotoUrl: z.string().optional(), // For displaying preview
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -121,6 +115,11 @@ export function RegisterHouseholdForm() {
   const [initialCenter, setInitialCenter] = useState<{lat: number, lng: number} | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
 
+  const [familyPhotoFile, setFamilyPhotoFile] = useState<File | null>(null);
+  const [housePhotoFile, setHousePhotoFile] = useState<File | null>(null);
+  const [familyPhotoUrl, setFamilyPhotoUrl] = useState<string | null>(null);
+  const [housePhotoUrl, setHousePhotoUrl] = useState<string | null>(null);
+
   const familyPhotoInputRef = useRef<HTMLInputElement>(null);
   const housePhotoInputRef = useRef<HTMLInputElement>(null);
 
@@ -141,8 +140,6 @@ export function RegisterHouseholdForm() {
   });
   
   const { watch, setValue } = form;
-  const familyPhotoUrl = watch('familyPhotoUrl');
-  const housePhotoUrl = watch('housePhotoUrl');
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -195,8 +192,12 @@ export function RegisterHouseholdForm() {
 
 
   const handleNext = async () => {
-    const currentStepFields = steps[step - 1].fields;
-    const isValid = await form.trigger(currentStepFields);
+    let isValid = true;
+    if (step === 1) {
+        isValid = await form.trigger(steps[0].fields);
+    } else if (step === 2) {
+        isValid = await form.trigger(steps[1].fields);
+    }
 
     if (isValid) {
       if (step < steps.length) {
@@ -230,15 +231,17 @@ export function RegisterHouseholdForm() {
               title: "Image Too Large",
               description: `Please select an image smaller than ${MAX_SIZE_MB}MB.`,
           });
-          // Reset the input field
           event.target.value = '';
           return;
       }
-      const fieldName = type === 'family' ? 'familyPhotoFile' : 'housePhotoFile';
-      const urlFieldName = type === 'family' ? 'familyPhotoUrl' : 'housePhotoUrl';
       
-      setValue(fieldName, file, { shouldValidate: true });
-      setValue(urlFieldName, URL.createObjectURL(file));
+      if (type === 'family') {
+          setFamilyPhotoFile(file);
+          setFamilyPhotoUrl(URL.createObjectURL(file));
+      } else {
+          setHousePhotoFile(file);
+          setHousePhotoUrl(URL.createObjectURL(file));
+      }
 
       toast({
         title: 'Photo Selected',
@@ -248,12 +251,14 @@ export function RegisterHouseholdForm() {
   };
 
   const cancelPhoto = (type: 'family' | 'house') => {
-    const fieldName = type === 'family' ? 'familyPhotoFile' : 'housePhotoFile';
-    const urlFieldName = type === 'family' ? 'familyPhotoUrl' : 'housePhotoUrl';
     const inputRef = type === 'family' ? familyPhotoInputRef : housePhotoInputRef;
-
-    setValue(fieldName, undefined, { shouldValidate: false });
-    setValue(urlFieldName, undefined, { shouldValidate: false });
+    if (type === 'family') {
+        setFamilyPhotoFile(null);
+        setFamilyPhotoUrl(null);
+    } else {
+        setHousePhotoFile(null);
+        setHousePhotoUrl(null);
+    }
 
     if (inputRef.current) {
         inputRef.current.value = '';
@@ -285,15 +290,14 @@ export function RegisterHouseholdForm() {
         const householdRef = doc(collection(firestore, 'households'));
         const householdId = householdRef.id;
 
-        // Upload photos to Firebase Storage
         let finalFamilyPhotoUrl = 'https://picsum.photos/seed/default-family/600/400';
-        if (values.familyPhotoFile) {
-            finalFamilyPhotoUrl = await uploadImage(values.familyPhotoFile, `households/${householdId}/familyPhoto.jpg`);
+        if (familyPhotoFile) {
+            finalFamilyPhotoUrl = await uploadImage(familyPhotoFile, `households/${householdId}/familyPhoto.jpg`);
         }
 
         let finalHousePhotoUrl = 'https://picsum.photos/seed/default-house/600/400';
-        if (values.housePhotoFile) {
-            finalHousePhotoUrl = await uploadImage(values.housePhotoFile, `households/${householdId}/housePhoto.jpg`);
+        if (housePhotoFile) {
+            finalHousePhotoUrl = await uploadImage(housePhotoFile, `households/${householdId}/housePhoto.jpg`);
         }
 
         const newHouseholdData = {
@@ -562,5 +566,3 @@ export function RegisterHouseholdForm() {
     </Form>
   );
 }
-
-    

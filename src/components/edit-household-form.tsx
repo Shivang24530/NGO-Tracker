@@ -186,6 +186,15 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
 
   async function onSubmit(values: FormData) {
     setIsSubmitting(true);
+    if (!firestore) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Firestore is not initialized.',
+      });
+      setIsSubmitting(false);
+      return;
+    }
     try {
         const batch = writeBatch(firestore);
         const householdRef = doc(firestore, 'households', household.id);
