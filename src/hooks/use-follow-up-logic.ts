@@ -68,17 +68,36 @@ export function useFollowUpLogic(year: number) {
     setChildrenLoading(true);
     setVisitsLoading(true);
     setProgressUpdatesLoading(true);
+    
+    // Reset state on household change to avoid stale data
+    setAllChildren([]);
+    setAllVisits([]);
+    setAllProgressUpdates([]);
+
 
     const unsubscribes: (() => void)[] = [];
 
     households.forEach(h => {
+      // Children listener
       const childrenQuery = collection(firestore, 'households', h.id, 'children');
       const childrenUnsubscribe = onSnapshot(childrenQuery, (snapshot) => {
         const childrenData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Child));
         setAllChildren(prev => [...prev.filter(c => c.householdId !== h.id), ...childrenData]);
+        
+        // Nested listener for progress updates
+        snapshot.docs.forEach(childDoc => {
+            const progressUpdatesQuery = collection(firestore, `households/${h.id}/children/${childDoc.id}/childProgressUpdates`);
+            const progressUnsubscribe = onSnapshot(progressUpdatesQuery, (progressSnapshot) => {
+                const progressData = progressSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ChildProgressUpdate));
+                setAllProgressUpdates(prev => [...prev.filter(p => p.child_id !== childDoc.id), ...progressData]);
+            }, (error) => console.error(`Error fetching progress for child ${childDoc.id}:`, error));
+            unsubscribes.push(progressUnsubscribe);
+        });
+
       }, (error) => console.error(`Error fetching children for household ${h.id}:`, error));
       unsubscribes.push(childrenUnsubscribe);
 
+      // Visits listener for the selected year
       const start = startOfYear(new Date(year, 0, 1));
       const end = endOfYear(new Date(year, 11, 31));
 
@@ -92,18 +111,6 @@ export function useFollowUpLogic(year: number) {
         setAllVisits(prev => [...prev.filter(v => v.householdId !== h.id), ...visitsData]);
       }, (error) => console.error(`Error fetching visits for household ${h.id}:`, error));
       unsubscribes.push(visitsUnsubscribe);
-
-      const childProgressQuery = collection(firestore, 'households', h.id, 'children');
-      onSnapshot(childProgressQuery, (childSnapshot) => {
-        childSnapshot.docs.forEach(childDoc => {
-          const progressUpdatesQuery = collection(firestore, `households/${h.id}/children/${childDoc.id}/childProgressUpdates`);
-          const progressUnsubscribe = onSnapshot(progressUpdatesQuery, (progressSnapshot) => {
-            const progressData = progressSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ChildProgressUpdate));
-            setAllProgressUpdates(prev => [...prev.filter(p => p.childId !== childDoc.id), ...progressData]);
-          }, (error) => console.error(`Error fetching progress for child ${childDoc.id}:`, error));
-          unsubscribes.push(progressUnsubscribe);
-        });
-      });
     });
     
     setChildrenLoading(false);
@@ -183,9 +190,7 @@ export function useFollowUpLogic(year: number) {
   const quarters = useMemo(() => {
     if (!households) return [];
 
-    const getProgressForQuarter = (q: number) => {
-        const visits = allVisits.filter(v => getQuarter(new Date(v.visitDate)) === q && getYear(new Date(v.visitDate)) === year);
-        const visitIds = new Set(visits.map(v => v.id));
+    const getProgressForQuarter = (visitIds: Set<string>) => {
         return allProgressUpdates.filter(p => visitIds.has(p.visit_id));
     };
 
@@ -194,13 +199,18 @@ export function useFollowUpLogic(year: number) {
         const start = startOfQuarter(quarterDate);
         const end = endOfQuarter(quarterDate);
 
+        // **LOGIC FIX:** Only count households that were created by the end of this quarter.
+        const householdsInQuarter = households.filter(h => new Date(h.createdAt) <= end);
+        const householdIdsInQuarter = new Set(householdsInQuarter.map(h => h.id));
+        
+        const totalCount = householdIdsInQuarter.size;
+
         const visitsForQuarter = allVisits.filter((v) => {
             const visitDate = new Date(v.visitDate);
-            return visitDate >= start && visitDate <= end;
+            return householdIdsInQuarter.has(v.householdId) && visitDate >= start && visitDate <= end;
         });
 
         const completedCount = visitsForQuarter.filter(v => v.status === 'Completed').length;
-        const totalCount = new Set(visitsForQuarter.map(v => v.householdId)).size;
         
         let status: 'Completed' | 'Pending' | 'Partially Completed' = 'Pending';
         if (totalCount === 0) {
@@ -215,15 +225,28 @@ export function useFollowUpLogic(year: number) {
         let declined = 0;
         let noChange = 0;
 
-        const currentQuarterProgress = getProgressForQuarter(qNum);
-        const childrenInQuarter = allChildren.filter(child => 
-            households.some(h => h.id === child.householdId && new Date(h.createdAt) <= end)
-        );
+        const currentVisitIds = new Set(visitsForQuarter.map(v => v.id));
+        const currentQuarterProgress = getProgressForQuarter(currentVisitIds);
+        
+        const childrenInQuarter = allChildren.filter(child => householdIdsInQuarter.has(child.householdId));
 
         if (qNum > 1) {
-            const previousQuarterProgress = getProgressForQuarter(qNum - 1);
-            const currentProgressByChild = new Map(currentQuarterProgress.map(p => [p.childId, p]));
-            const previousProgressByChild = new Map(previousQuarterProgress.map(p => [p.childId, p]));
+            const prevQuarterDate = new Date(year, (qNum - 2) * 3, 1);
+            const prevStart = startOfQuarter(prevQuarterDate);
+            const prevEnd = endOfQuarter(prevQuarterDate);
+            
+            const householdsInPrevQuarter = households.filter(h => new Date(h.createdAt) <= prevEnd);
+            const householdIdsInPrevQuarter = new Set(householdsInPrevQuarter.map(h => h.id));
+
+            const prevVisitsForQuarter = allVisits.filter(v => {
+                const visitDate = new Date(v.visitDate);
+                return householdIdsInPrevQuarter.has(v.householdId) && visitDate >= prevStart && visitDate <= prevEnd;
+            });
+            const prevVisitIds = new Set(prevVisitsForQuarter.map(v => v.id));
+            const previousQuarterProgress = getProgressForQuarter(prevVisitIds);
+
+            const currentProgressByChild = new Map(currentQuarterProgress.map(p => [p.child_id, p]));
+            const previousProgressByChild = new Map(previousQuarterProgress.map(p => [p.child_id, p]));
 
             childrenInQuarter.forEach(child => {
                 const current = currentProgressByChild.get(child.id);
@@ -241,7 +264,7 @@ export function useFollowUpLogic(year: number) {
             });
         }
         
-        const childrenWithData = new Set(currentQuarterProgress.map(p => p.childId));
+        const childrenWithData = new Set(currentQuarterProgress.map(p => p.child_id));
         const notRecorded = childrenInQuarter.length - childrenWithData.size;
 
         return {
@@ -264,3 +287,5 @@ export function useFollowUpLogic(year: number) {
 
   return { quarters, households, children: allChildren, visits: allVisits, progressUpdates: allProgressUpdates, isLoading };
 }
+
+    
