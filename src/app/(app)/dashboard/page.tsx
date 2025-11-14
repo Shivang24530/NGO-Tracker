@@ -13,7 +13,7 @@ import { PageHeader } from '@/components/common/page-header';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useFollowUpLogic } from '@/hooks/use-follow-up-logic';
-import { isPast, isSameDay } from 'date-fns';
+import { getQuarter, isSameDay } from 'date-fns';
 import { useFirestore } from '@/firebase';
 import { Loader2 } from 'lucide-react';
 
@@ -27,15 +27,19 @@ export default function Dashboard() {
   const childrenStudying = children?.filter((c) => c.isStudying).length ?? 0;
   const childrenNotStudying = totalChildren - childrenStudying;
   
-  const visitsThisQuarter = visits?.filter(
-    (v) => new Date(v.visitDate) > new Date(new Date().setMonth(new Date().getMonth() - 3))
-  ).length ?? 0;
+  const currentQuarter = getQuarter(new Date());
+  const completedVisitsInQuarter = visits?.filter(
+    (v) => v.status === 'Completed' && getQuarter(new Date(v.visitDate)) === currentQuarter
+  ) || [];
+
+  const visitsThisQuarter = new Set(completedVisitsInQuarter.map(v => v.householdId)).size;
+
 
   const stats = [
       { title: 'Total Families', value: totalFamilies, icon: Users, color: 'bg-orange-500', progress: totalFamilies > 0 ? (totalFamilies / (households?.length || 1)) * 100 : 0 },
       { title: 'Total Children', value: totalChildren, icon: Users, color: 'bg-pink-500', progress: (totalChildren / (children?.length || 1)) * 100 },
       { title: 'Children Studying', value: childrenStudying, icon: TrendingUp, color: 'bg-green-500', progress: totalChildren > 0 ? (childrenStudying/totalChildren) * 100 : 0 },
-      { title: 'Visits This Quarter', value: visitsThisQuarter, icon: Clock, color: 'bg-purple-500', progress: visitsThisQuarter > 0 ? (visitsThisQuarter / (visits?.length || 1))*100 : 0 },
+      { title: 'Families Visited This Quarter', value: visitsThisQuarter, icon: Clock, color: 'bg-purple-500', progress: visitsThisQuarter > 0 ? (visitsThisQuarter / (totalFamilies || 1))*100 : 0 },
   ];
   
   return (
