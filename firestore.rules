@@ -9,12 +9,6 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Checks if the user is the owner of the provided document.
-    // The `doc` parameter is the result of a get() call or the `resource` variable.
-    function isOwner(doc) {
-      return isSignedIn() && request.auth.uid == doc.data.ownerId;
-    }
-
     // households/{householdId}
     match /households/{householdId} {
       // Allow authenticated users to list & get households (admins/field workers)
