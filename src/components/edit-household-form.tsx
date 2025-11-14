@@ -50,7 +50,7 @@ import { Checkbox } from './ui/checkbox';
 const childSchema = z.object({
   id: z.string().optional(), // Existing children will have an ID
   name: z.string().min(2, 'Name is too short'),
-  age: z.coerce.number().min(0, 'Age cannot be negative').max(25),
+  dateOfBirth: z.string(),
   gender: z.enum(['Male', 'Female', 'Other']),
   isStudying: z.boolean(),
   currentClass: z.string().optional(),
@@ -71,7 +71,7 @@ const formSchema = z.object({
   children: z.array(childSchema),
   // Fields for adding a new child
   newChildName: z.string().optional(),
-  newChildAge: z.coerce.number().optional(),
+  newChildDateOfBirth: z.string().optional(),
   newChildGender: z.enum(['Male', 'Female', 'Other']).optional(),
   newChildStudyingStatus: z.enum(['Studying', 'Not Studying', 'Migrated']).optional(),
   newChildCurrentClass: z.string().optional(),
@@ -106,7 +106,6 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
       children: initialChildren.map(c => ({ 
         id: c.id, 
         name: c.name, 
-        age: 0, // Age will be calculated from dateOfBirth
         dateOfBirth: c.dateOfBirth,
         gender: c.gender,
         isStudying: c.isStudying,
@@ -140,16 +139,16 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
 
   const handleAddNewChild = () => {
     const name = form.getValues('newChildName');
-    const age = form.getValues('newChildAge');
+    const dateOfBirth = form.getValues('newChildDateOfBirth');
     const gender = form.getValues('newChildGender');
     const studyingStatus = form.getValues('newChildStudyingStatus');
     const currentClass = form.getValues('newChildCurrentClass');
     const schoolName = form.getValues('newChildSchoolName');
 
-    if (name && age !== undefined && gender && studyingStatus) {
+    if (name && dateOfBirth && gender && studyingStatus) {
         append({ 
             name, 
-            age, 
+            dateOfBirth, 
             gender, 
             isStudying: studyingStatus === 'Studying',
             currentClass: studyingStatus === 'Studying' ? currentClass : '',
@@ -157,13 +156,13 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
         });
         // Reset fields
         form.setValue('newChildName', '');
-        form.setValue('newChildAge', undefined);
+        form.setValue('newChildDateOfBirth', undefined);
         form.setValue('newChildGender', undefined);
         form.setValue('newChildStudyingStatus', 'Not Studying');
         form.setValue('newChildCurrentClass', '');
         form.setValue('newChildSchoolName', '');
     } else {
-        toast({ variant: 'destructive', title: 'Missing child details', description: 'Please fill out Name, Age, Gender, and Status for the new child.' });
+        toast({ variant: 'destructive', title: 'Missing child details', description: 'Please fill out Name, Date of Birth, Gender, and Status for the new child.' });
     }
   };
 
@@ -218,13 +217,12 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
 
         // 3. Handle children updates/additions
         values.children.forEach(child => {
-            const dob = new Date(new Date().getFullYear() - child.age, 0, 1).toISOString();
             if (child.id) {
                 // Update existing child
                 const childRef = doc(childrenCollectionRef, child.id);
                 batch.update(childRef, { 
                     name: child.name, 
-                    dateOfBirth: dob, 
+                    dateOfBirth: child.dateOfBirth, 
                     gender: child.gender,
                     isStudying: child.isStudying,
                     currentClass: child.isStudying ? child.currentClass : '',
@@ -237,7 +235,7 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
                     id: newChildRef.id,
                     householdId: household.id,
                     name: child.name,
-                    dateOfBirth: dob,
+                    dateOfBirth: child.dateOfBirth,
                     gender: child.gender,
                     isStudying: child.isStudying,
                     currentClass: child.isStudying ? child.currentClass : '',
@@ -331,7 +329,7 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
               <div key={field.id} className="border p-4 rounded-lg space-y-4 relative bg-background">
                  <div className="grid md:grid-cols-3 gap-4">
                     <FormField control={form.control} name={`children.${index}.name`} render={({ field }) => <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
-                    <FormField control={form.control} name={`children.${index}.age`} render={({ field }) => <FormItem><FormLabel>Age</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>} />
+                    <FormField control={form.control} name={`children.${index}.dateOfBirth`} render={({ field }) => <FormItem><FormLabel>Date of Birth</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>} />
                     <FormField control={form.control} name={`children.${index}.gender`} render={({ field }) => <FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select><FormMessage /></FormItem>} />
                  </div>
                  <FormField
@@ -380,7 +378,7 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
                  <div className="space-y-4 p-4 border rounded-lg bg-secondary/30">
                     <div className="grid md:grid-cols-3 gap-4">
                         <FormField control={form.control} name="newChildName" render={({ field }) => <FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="Child's full name" {...field} value={field.value || ''}/></FormControl></FormItem>} />
-                        <FormField control={form.control} name="newChildAge" render={({ field }) => <FormItem><FormLabel>Age</FormLabel><FormControl><Input type="number" placeholder="e.g. 8" {...field} value={field.value || ''} onChange={event => field.onChange(+event.target.value)} /></FormControl></FormItem>} />
+                        <FormField control={form.control} name="newChildDateOfBirth" render={({ field }) => <FormItem><FormLabel>Date of Birth</FormLabel><FormControl><Input type="date" {...field} value={field.value || ''} /></FormControl></FormItem>} />
                         <FormField control={form.control} name="newChildGender" render={({ field }) => <FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select></FormItem>} />
                     </div>
                      <FormField

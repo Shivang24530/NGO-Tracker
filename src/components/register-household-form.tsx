@@ -35,7 +35,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { MapPin, Trash2, PlusCircle, Loader2, Users, Home, Phone, ArrowRight, Upload } from 'lucide-react';
+import { MapPin, Trash2, PlusCircle, Loader2, Users, Home, Phone, ArrowRight, Upload, XCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { cn } from '@/lib/utils';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
@@ -223,6 +223,17 @@ export function RegisterHouseholdForm() {
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, type: 'family' | 'house') => {
     const file = event.target.files?.[0];
     if (file) {
+      const MAX_SIZE_MB = 1;
+      if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+          toast({
+              variant: "destructive",
+              title: "Image Too Large",
+              description: `Please select an image smaller than ${MAX_SIZE_MB}MB.`,
+          });
+          // Reset the input field
+          event.target.value = '';
+          return;
+      }
       const fieldName = type === 'family' ? 'familyPhotoFile' : 'housePhotoFile';
       const urlFieldName = type === 'family' ? 'familyPhotoUrl' : 'housePhotoUrl';
       
@@ -235,6 +246,19 @@ export function RegisterHouseholdForm() {
       });
     }
   };
+
+  const cancelPhoto = (type: 'family' | 'house') => {
+    const fieldName = type === 'family' ? 'familyPhotoFile' : 'housePhotoFile';
+    const urlFieldName = type === 'family' ? 'familyPhotoUrl' : 'housePhotoUrl';
+    const inputRef = type === 'family' ? familyPhotoInputRef : housePhotoInputRef;
+
+    setValue(fieldName, undefined, { shouldValidate: false });
+    setValue(urlFieldName, undefined, { shouldValidate: false });
+
+    if (inputRef.current) {
+        inputRef.current.value = '';
+    }
+  }
 
   const uploadImage = async (file: File, path: string): Promise<string> => {
     const storage = getStorage(firebaseApp);
@@ -461,6 +485,11 @@ export function RegisterHouseholdForm() {
                     <Button type="button" variant="outline" className="w-full" onClick={() => familyPhotoInputRef.current?.click()}>
                         <Upload className="mr-2 h-4 w-4" /> Upload Photo
                     </Button>
+                    {familyPhotoUrl && (
+                        <Button type="button" variant="destructive" onClick={() => cancelPhoto('family')}>
+                            <XCircle className="mr-2 h-4 w-4" /> Cancel
+                        </Button>
+                    )}
                 </div>
               </div>
               <div className="space-y-4">
@@ -472,6 +501,11 @@ export function RegisterHouseholdForm() {
                     <Button type="button" variant="outline" className="w-full" onClick={() => housePhotoInputRef.current?.click()}>
                         <Upload className="mr-2 h-4 w-4" /> Upload Photo
                     </Button>
+                    {housePhotoUrl && (
+                         <Button type="button" variant="destructive" onClick={() => cancelPhoto('house')}>
+                            <XCircle className="mr-2 h-4 w-4" /> Cancel
+                        </Button>
+                    )}
                 </div>
               </div>
             </div>

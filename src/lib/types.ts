@@ -51,5 +51,3 @@ export type ChildProgressUpdate = {
   work_details?: string;
   studying_challenges?: string;
 };
-
-    

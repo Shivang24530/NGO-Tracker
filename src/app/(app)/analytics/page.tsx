@@ -20,6 +20,7 @@ import { collection, query, getDocs, where } from 'firebase/firestore';
 import type { Household, Child } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
+import { calculateAge } from '@/lib/utils';
 
 export default function AnalyticsPage() {
   const firestore = useFirestore();

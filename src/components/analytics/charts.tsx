@@ -11,6 +11,8 @@ import {
 } from '@/components/ui/chart';
 import type { Child, Household } from '@/lib/types';
 import { useMemo } from 'react';
+import { calculateAge } from '@/lib/utils';
+
 
 const CHART_COLORS = {
   blue: 'hsl(var(--chart-1))',
@@ -113,10 +115,11 @@ export function AgeGroupChart({ data }: ChartProps<Child>) {
     };
 
     data.forEach(child => {
-      if (child.age <= 5) ageGroups['0-5']++;
-      else if (child.age <= 10) ageGroups['6-10']++;
-      else if (child.age <= 14) ageGroups['11-14']++;
-      else if (child.age <= 18) ageGroups['15-18']++;
+      const age = calculateAge(child.dateOfBirth);
+      if (age <= 5) ageGroups['0-5']++;
+      else if (age <= 10) ageGroups['6-10']++;
+      else if (age <= 14) ageGroups['11-14']++;
+      else if (age <= 18) ageGroups['15-18']++;
       else ageGroups['18+']++;
     });
 
