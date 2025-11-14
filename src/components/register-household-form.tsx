@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -11,7 +12,8 @@ import {
   doc,
   writeBatch,
 } from 'firebase/firestore';
-import { useFirestore, useUser } from '@/firebase';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { useFirestore, useUser, useFirebaseApp } from '@/firebase';
 import { formatISO, addMonths, getYear } from 'date-fns';
 import { LocationPicker } from '@/components/map/location-picker';
 import { Button } from '@/components/ui/button';
@@ -42,7 +44,9 @@ import type { FollowUpVisit } from '@/lib/types';
 
 const childSchema = z.object({
   name: z.string().min(2, 'Name is too short'),
-  age: z.coerce.number().min(0, 'Age cannot be negative').max(25),
+  dateOfBirth: z.string().refine((dob) => new Date(dob).toString() !== 'Invalid Date', {
+    message: 'Please enter a valid date of birth.',
+  }),
   gender: z.enum(['Male', 'Female', 'Other']),
   studyingStatus: z.enum(['Studying', 'Not Studying', 'Migrated']).default('Not Studying'),
   currentClass: z.string().optional(),
@@ -65,8 +69,10 @@ const formSchema = z.object({
   children: z.array(childSchema),
 
   // Step 3
-  familyPhotoUrl: z.string().optional(),
-  housePhotoUrl: z.string().optional(),
+  familyPhotoFile: z.instanceof(File).optional(),
+  housePhotoFile: z.instanceof(File).optional(),
+  familyPhotoUrl: z.string().optional(), // For displaying preview
+  housePhotoUrl: z.string().optional(), // For displaying preview
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -108,6 +114,7 @@ function Stepper({ currentStep }: { currentStep: number }) {
 export function RegisterHouseholdForm() {
   const router = useRouter();
   const firestore = useFirestore();
+  const firebaseApp = useFirebaseApp();
   const { user } = useUser();
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -145,23 +152,46 @@ export function RegisterHouseholdForm() {
       return;
     }
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          setInitialCenter({ lat: latitude, lng: longitude });
-          setValue('latitude', latitude);
-          setValue('longitude', longitude);
-        },
-        (error) => {
-          console.warn("Could not get user location, defaulting.", error);
-          setInitialCenter({ lat: 28.7041, lng: 77.1025 });
+    let isMounted = true;
+    let watchId: number;
+
+    const fallbackToDefaultLocation = () => {
+        if (isMounted) {
+            setInitialCenter({ lat: 28.7041, lng: 77.1025 });
         }
-      );
+    };
+
+    if (navigator.geolocation) {
+        watchId = navigator.geolocation.watchPosition(
+            (position) => {
+                if (isMounted) {
+                    const { latitude, longitude } = position.coords;
+                    if (!initialCenter) { // Set initial center only once
+                        setInitialCenter({ lat: latitude, lng: longitude });
+                    }
+                    setValue('latitude', latitude);
+                    setValue('longitude', longitude);
+                }
+            },
+            (error) => {
+                console.warn("Could not get user location, defaulting.", error);
+                fallbackToDefaultLocation();
+            },
+            {
+                enableHighAccuracy: true,
+            }
+        );
     } else {
-        setInitialCenter({ lat: 28.7041, lng: 77.1025 });
+        fallbackToDefaultLocation();
     }
-  }, [apiKey, setValue]);
+
+    return () => {
+        isMounted = false;
+        if (watchId) {
+            navigator.geolocation.clearWatch(watchId);
+        }
+    };
+}, [apiKey, setValue, initialCenter]);
 
 
   const handleNext = async () => {
@@ -193,17 +223,25 @@ export function RegisterHouseholdForm() {
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, type: 'family' | 'house') => {
     const file = event.target.files?.[0];
     if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const dataUrl = e.target?.result as string;
-            setValue(type === 'family' ? 'familyPhotoUrl' : 'housePhotoUrl', dataUrl, { shouldValidate: true });
-            toast({
-              title: 'Photo Uploaded',
-              description: `A new ${type} photo has been uploaded.`,
-          });
-        };
-        reader.readAsDataURL(file);
+      const fieldName = type === 'family' ? 'familyPhotoFile' : 'housePhotoFile';
+      const urlFieldName = type === 'family' ? 'familyPhotoUrl' : 'housePhotoUrl';
+      
+      setValue(fieldName, file, { shouldValidate: true });
+      setValue(urlFieldName, URL.createObjectURL(file));
+
+      toast({
+        title: 'Photo Selected',
+        description: `Photo for ${type} is ready for upload.`,
+      });
     }
+  };
+
+  const uploadImage = async (file: File, path: string): Promise<string> => {
+    const storage = getStorage(firebaseApp);
+    const imageRef = storageRef(storage, path);
+    await uploadBytes(imageRef, file);
+    const downloadURL = await getDownloadURL(imageRef);
+    return downloadURL;
   };
 
   async function onSubmit(values: FormData) {
@@ -220,13 +258,23 @@ export function RegisterHouseholdForm() {
 
     try {
         const batch = writeBatch(firestore);
-        
-        // Generate a new unique ID for the household
         const householdRef = doc(collection(firestore, 'households'));
+        const householdId = householdRef.id;
+
+        // Upload photos to Firebase Storage
+        let finalFamilyPhotoUrl = 'https://picsum.photos/seed/default-family/600/400';
+        if (values.familyPhotoFile) {
+            finalFamilyPhotoUrl = await uploadImage(values.familyPhotoFile, `households/${householdId}/familyPhoto.jpg`);
+        }
+
+        let finalHousePhotoUrl = 'https://picsum.photos/seed/default-house/600/400';
+        if (values.housePhotoFile) {
+            finalHousePhotoUrl = await uploadImage(values.housePhotoFile, `households/${householdId}/housePhoto.jpg`);
+        }
 
         const newHouseholdData = {
-          id: householdRef.id,
-          ownerId: user.uid, // Add ownerId for security rules
+          id: householdId,
+          ownerId: user.uid,
           familyName: values.familyName,
           fullAddress: values.fullAddress,
           locationArea: values.locationArea,
@@ -235,8 +283,8 @@ export function RegisterHouseholdForm() {
           nextFollowupDue: formatISO(addMonths(new Date(), 3)),
           latitude: values.latitude,
           longitude: values.longitude,
-          familyPhotoUrl: values.familyPhotoUrl || 'https://picsum.photos/seed/default-family/600/400',
-          housePhotoUrl: values.housePhotoUrl || 'https://picsum.photos/seed/default-house/600/400',
+          familyPhotoUrl: finalFamilyPhotoUrl,
+          housePhotoUrl: finalHousePhotoUrl,
           toiletAvailable: false,
           waterSupply: 'Other' as const,
           electricity: false,
@@ -251,7 +299,7 @@ export function RegisterHouseholdForm() {
                 id: childRef.id,
                 householdId: householdRef.id,
                 name: child.name,
-                age: child.age,
+                dateOfBirth: child.dateOfBirth,
                 gender: child.gender,
                 isStudying: child.studyingStatus === 'Studying',
                 currentClass: child.currentClass || 'N/A',
@@ -341,7 +389,7 @@ export function RegisterHouseholdForm() {
               <div key={field.id} className="border p-4 rounded-lg space-y-4 relative bg-secondary/30">
                  <div className="grid md:grid-cols-3 gap-4">
                     <FormField control={form.control} name={`children.${index}.name`} render={({ field }) => <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
-                    <FormField control={form.control} name={`children.${index}.age`} render={({ field }) => <FormItem><FormLabel>Age</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>} />
+                    <FormField control={form.control} name={`children.${index}.dateOfBirth`} render={({ field }) => <FormItem><FormLabel>Date of Birth</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>} />
                     <FormField control={form.control} name={`children.${index}.gender`} render={({ field }) => <FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select><FormMessage /></FormItem>} />
                  </div>
                  <FormField
@@ -395,7 +443,7 @@ export function RegisterHouseholdForm() {
                  <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => remove(index)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             ))}
-            <Button type="button" variant="outline" onClick={() => append({ name: '', age: 0, gender: 'Male', studyingStatus: 'Not Studying', currentClass: '', schoolName: '' })}><PlusCircle className="mr-2 h-4 w-4" />Add Child</Button>
+            <Button type="button" variant="outline" onClick={() => append({ name: '', dateOfBirth: '', gender: 'Male', studyingStatus: 'Not Studying', currentClass: '', schoolName: '' })}><PlusCircle className="mr-2 h-4 w-4" />Add Child</Button>
           </div>
         );
       case 3:

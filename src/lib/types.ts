@@ -22,7 +22,7 @@ export type Child = {
   id: string;
   householdId: string;
   name: string;
-  age: number;
+  dateOfBirth: string; // ISO date string
   gender: 'Male' | 'Female' | 'Other';
   isStudying: boolean;
   currentClass: string;

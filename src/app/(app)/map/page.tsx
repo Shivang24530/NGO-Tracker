@@ -65,7 +65,8 @@ export default function MapOverviewPage() {
 
     useEffect(() => {
         let isMounted = true;
-        
+        let watchId: number;
+
         const fallbackToDefaultLocation = () => {
             if (isMounted) {
                 // A reasonable default if no other location is available
@@ -74,7 +75,7 @@ export default function MapOverviewPage() {
         };
 
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
+            watchId = navigator.geolocation.watchPosition(
                 (position) => {
                     if (isMounted) {
                         setCenter({ lat: position.coords.latitude, lng: position.coords.longitude });
@@ -83,6 +84,9 @@ export default function MapOverviewPage() {
                 () => {
                     // Geolocation failed or denied, use fallback
                     fallbackToDefaultLocation();
+                },
+                {
+                    enableHighAccuracy: true,
                 }
             );
         } else {
@@ -92,6 +96,9 @@ export default function MapOverviewPage() {
 
         return () => {
             isMounted = false;
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+            }
         };
     }, []);
 

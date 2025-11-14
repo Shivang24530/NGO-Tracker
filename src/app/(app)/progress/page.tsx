@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { ProgressAnalysis } from '@/components/genai/progress-analysis';
-import { ArrowUp, ArrowDown, Loader2, Users } from 'lucide-react';
+import { ArrowUp, ArrowDown, Loader2, Users, Minus, HelpCircle } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -20,76 +20,23 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, doc, query, collectionGroup, getDocs, where } from 'firebase/firestore';
-import type { Child, Household } from '@/lib/types';
-import { useEffect, useState, useMemo } from 'react';
+import { useFollowUpLogic } from '@/hooks/use-follow-up-logic';
+import type { Child } from '@/lib/types';
+import { getQuarter } from 'date-fns';
+import { calculateAge } from '@/lib/utils';
 
 export default function ProgressTrackingPage() {
-  const firestore = useFirestore();
-  const { user, isUserLoading } = useUser();
-  const [childrenWithStatus, setChildrenWithStatus] = useState<(Child & { status: 'Improved' | 'Declined' })[]>([]);
-  const [allChildren, setAllChildren] = useState<Child[]>([]);
-  const [childrenLoading, setChildrenLoading] = useState(true);
+  const currentYear = new Date().getFullYear();
+  const { quarters, households, children, isLoading } = useFollowUpLogic(currentYear);
 
-  const householdsQuery = useMemoFirebase(
-    () => (firestore && user ? query(collection(firestore, 'households'), where('ownerId', '==', user.uid)) : null),
-    [firestore, user]
-  );
-  const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
+  const currentQuarterNum = getQuarter(new Date());
+  const currentQuarter = quarters.find(q => q.id === currentQuarterNum);
 
-  useEffect(() => {
-    if (households === null) {
-      setChildrenLoading(true);
-      return;
-    }
-    
-    if (households.length === 0) {
-        setAllChildren([]);
-        setChildrenLoading(false);
-        return;
-    }
-
-    const fetchAllChildren = async () => {
-      if (!firestore) return;
-      setChildrenLoading(true);
-      const childrenPromises = households.map(h => 
-        getDocs(collection(firestore, 'households', h.id, 'children'))
-      );
-      try {
-        const childrenSnapshots = await Promise.all(childrenPromises);
-        const childrenData = childrenSnapshots.flatMap(snap => 
-          snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Child))
-        );
-        setAllChildren(childrenData);
-      } catch (error) {
-        console.error("Error fetching children data:", error);
-        setAllChildren([]);
-      } finally {
-        setChildrenLoading(false);
-      }
-    };
-    
-    fetchAllChildren();
-  }, [firestore, households]);
-  
-  useEffect(() => {
-    if (allChildren) {
-      // This is placeholder logic to simulate progress status
-      const childrenWithRandomStatus = allChildren.map(child => ({
-        ...child,
-        status: Math.random() > 0.5 ? 'Improved' : 'Declined' as 'Improved' | 'Declined',
-      }));
-      setChildrenWithStatus(childrenWithRandomStatus);
-    }
-  }, [allChildren]); 
-
-
-  const isLoading = isUserLoading || householdsLoading || childrenLoading;
-
-  const totalChildren = allChildren.length ?? 0;
-  const improvedCount = childrenWithStatus.filter(c => c.status === 'Improved').length;
-  const declinedCount = childrenWithStatus.filter(c => c.status === 'Declined').length;
+  const totalChildren = children.length ?? 0;
+  const improvedCount = currentQuarter?.improved ?? 0;
+  const declinedCount = currentQuarter?.declined ?? 0;
+  const noChangeCount = currentQuarter?.noChange ?? 0;
+  const notRecordedCount = currentQuarter?.notRecorded ?? 0;
   
   const findHouseholdName = (householdId: string) => {
     return households?.find(h => h.id === householdId)?.familyName || '...';
@@ -99,7 +46,7 @@ export default function ProgressTrackingPage() {
     <div className="flex min-h-screen w-full flex-col">
       <PageHeader title="Progress Tracking" />
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-5">
             <Card>
                 <CardHeader className="pb-2">
                     <CardDescription>Total Children</CardDescription>
@@ -120,7 +67,7 @@ export default function ProgressTrackingPage() {
                 <CardContent>
                     <div className="text-xs text-muted-foreground flex items-center">
                         <ArrowUp className="h-4 w-4 mr-1 text-primary" />
-                        +5% from last quarter
+                        Current quarter progress
                     </div>
                 </CardContent>
             </Card>
@@ -132,7 +79,31 @@ export default function ProgressTrackingPage() {
                 <CardContent>
                      <div className="text-xs text-muted-foreground flex items-center">
                         <ArrowDown className="h-4 w-4 mr-1 text-destructive" />
-                        +2% from last quarter
+                        Current quarter progress
+                    </div>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardDescription>No Change</CardDescription>
+                    <CardTitle className="text-4xl text-gray-500">{isLoading ? '...' : noChangeCount}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                     <div className="text-xs text-muted-foreground flex items-center">
+                        <Minus className="h-4 w-4 mr-1 text-gray-500" />
+                        Current quarter progress
+                    </div>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardDescription>Not Recorded</CardDescription>
+                    <CardTitle className="text-4xl text-yellow-500">{isLoading ? '...' : notRecordedCount}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                     <div className="text-xs text-muted-foreground flex items-center">
+                        <HelpCircle className="h-4 w-4 mr-1 text-yellow-500" />
+                        Data not recorded this quarter
                     </div>
                 </CardContent>
             </Card>
@@ -165,12 +136,12 @@ export default function ProgressTrackingPage() {
                       <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                     </TableCell>
                   </TableRow>
-                ) : childrenWithStatus.length > 0 ? (
-                  childrenWithStatus.map((child) => (
+                ) : children.length > 0 ? (
+                  children.map((child: Child) => (
                   <TableRow key={child.id}>
                     <TableCell className="font-medium">{child.name}</TableCell>
                     <TableCell>{findHouseholdName(child.householdId)}</TableCell>
-                    <TableCell>{child.age}</TableCell>
+                    <TableCell>{calculateAge(child.dateOfBirth)}</TableCell>
                     <TableCell>
                       <Badge
                         variant={child.isStudying ? 'default' : 'destructive'}

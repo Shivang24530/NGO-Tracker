@@ -4,11 +4,12 @@ import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 let firebaseApp: FirebaseApp;
 if (!getApps().length) {
   try {
-    firebaseApp = initializeApp();
+    firebaseApp = initializeApp(firebaseConfig);
   } catch (e) {
     if (process.env.NODE_ENV === 'production') {
       console.warn(
@@ -24,8 +25,9 @@ if (!getApps().length) {
 
 const auth = getAuth(firebaseApp);
 const firestore = getFirestore(firebaseApp);
+const storage = getStorage(firebaseApp);
 
-export { firebaseApp, auth, firestore };
+export { firebaseApp, auth, firestore, storage };
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
@@ -33,6 +35,7 @@ export function initializeFirebase() {
     firebaseApp,
     auth,
     firestore,
+    storage,
   };
 }
 
@@ -41,6 +44,7 @@ export function getSdks(app: FirebaseApp) {
     firebaseApp: app,
     auth: getAuth(app),
     firestore: getFirestore(app),
+    storage: getStorage(app),
   };
 }
 

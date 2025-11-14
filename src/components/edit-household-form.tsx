@@ -6,8 +6,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray } from 'react-hook-form';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
-import { doc, writeBatch, collection, getDocs, query, deleteDoc } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { doc, writeBatch, collection, getDocs } from 'firebase/firestore';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { useFirestore, useFirebaseApp } from '@/firebase';
 import { LocationPicker } from '@/components/map/location-picker';
 import { Button } from '@/components/ui/button';
 import {
@@ -87,6 +88,7 @@ interface EditHouseholdFormProps {
 export function EditHouseholdForm({ household, initialChildren }: EditHouseholdFormProps) {
   const router = useRouter();
   const firestore = useFirestore();
+  const firebaseApp = useFirebaseApp();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [childrenToDelete, setChildrenToDelete] = useState<string[]>([]);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -104,7 +106,8 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
       children: initialChildren.map(c => ({ 
         id: c.id, 
         name: c.name, 
-        age: c.age, 
+        age: 0, // Age will be calculated from dateOfBirth
+        dateOfBirth: c.dateOfBirth,
         gender: c.gender,
         isStudying: c.isStudying,
         currentClass: c.currentClass || '',
@@ -215,12 +218,13 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
 
         // 3. Handle children updates/additions
         values.children.forEach(child => {
+            const dob = new Date(new Date().getFullYear() - child.age, 0, 1).toISOString();
             if (child.id) {
                 // Update existing child
                 const childRef = doc(childrenCollectionRef, child.id);
                 batch.update(childRef, { 
                     name: child.name, 
-                    age: child.age, 
+                    dateOfBirth: dob, 
                     gender: child.gender,
                     isStudying: child.isStudying,
                     currentClass: child.isStudying ? child.currentClass : '',
@@ -233,7 +237,7 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
                     id: newChildRef.id,
                     householdId: household.id,
                     name: child.name,
-                    age: child.age,
+                    dateOfBirth: dob,
                     gender: child.gender,
                     isStudying: child.isStudying,
                     currentClass: child.isStudying ? child.currentClass : '',

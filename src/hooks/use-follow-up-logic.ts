@@ -17,8 +17,9 @@ import {
   doc,
   writeBatch,
   getDocs,
+  onSnapshot,
 } from 'firebase/firestore';
-import type { Household, Child, FollowUpVisit } from '@/lib/types';
+import type { Household, Child, FollowUpVisit, ChildProgressUpdate } from '@/lib/types';
 import {
   startOfQuarter,
   endOfQuarter,
@@ -43,74 +44,79 @@ export function useFollowUpLogic(year: number) {
   const [childrenLoading, setChildrenLoading] = useState(true);
   const [allVisits, setAllVisits] = useState<FollowUpVisit[]>([]);
   const [visitsLoading, setVisitsLoading] = useState(true);
+  const [allProgressUpdates, setAllProgressUpdates] = useState<ChildProgressUpdate[]>([]);
+  const [progressUpdatesLoading, setProgressUpdatesLoading] = useState(true);
 
-  // Effect for fetching nested children and visits data
   useEffect(() => {
-    if (households === null) {
+    if (!firestore || households === null) {
       setChildrenLoading(true);
       setVisitsLoading(true);
+      setProgressUpdatesLoading(true);
       return;
     }
 
     if (households.length === 0) {
       setAllChildren([]);
       setAllVisits([]);
+      setAllProgressUpdates([]);
       setChildrenLoading(false);
       setVisitsLoading(false);
+      setProgressUpdatesLoading(false);
       return;
     }
 
-    const fetchChildAndVisitData = async () => {
-      if (!firestore) return;
-      setChildrenLoading(true);
-      setVisitsLoading(true);
+    setChildrenLoading(true);
+    setVisitsLoading(true);
+    setProgressUpdatesLoading(true);
 
-      const childrenPromises = households.map(h => 
-          getDocs(collection(firestore, 'households', h.id, 'children'))
+    const unsubscribes: (() => void)[] = [];
+
+    households.forEach(h => {
+      const childrenQuery = collection(firestore, 'households', h.id, 'children');
+      const childrenUnsubscribe = onSnapshot(childrenQuery, (snapshot) => {
+        const childrenData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Child));
+        setAllChildren(prev => [...prev.filter(c => c.householdId !== h.id), ...childrenData]);
+      });
+      unsubscribes.push(childrenUnsubscribe);
+
+      const visitsQuery = query(
+        collection(firestore, 'households', h.id, 'followUpVisits'),
+        where('visitDate', '>=', startOfYear(new Date(year, 0, 1)).toISOString()),
+        where('visitDate', '<=', endOfYear(new Date(year, 11, 31)).toISOString())
       );
-      
-      const visitsPromises = households.map(h => 
-          getDocs(query(
-              collection(firestore, 'households', h.id, 'followUpVisits'),
-              where('visitDate', '>=', startOfYear(new Date(year, 0, 1)).toISOString()),
-              where('visitDate', '<=', endOfYear(new Date(year, 11, 31)).toISOString())
-          ))
-      );
+      const visitsUnsubscribe = onSnapshot(visitsQuery, (snapshot) => {
+        const visitsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as FollowUpVisit));
+        setAllVisits(prev => [...prev.filter(v => v.householdId !== h.id), ...visitsData]);
+      });
+      unsubscribes.push(visitsUnsubscribe);
 
-      try {
-          const [childrenSnapshots, visitsSnapshots] = await Promise.all([
-              Promise.all(childrenPromises),
-              Promise.all(visitsPromises)
-          ]);
-
-          const childrenData = childrenSnapshots.flatMap(snap => 
-              snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Child))
-          );
-          const visitsData = visitsSnapshots.flatMap(snap => 
-              snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowUpVisit))
-          );
-
-          setAllChildren(childrenData);
-          setAllVisits(visitsData);
-      } catch (error) {
-          console.error("Error fetching child and visit data:", error);
-      } finally {
-          setChildrenLoading(false);
-          setVisitsLoading(false);
-      }
-    };
+      const childProgressQuery = collection(firestore, 'households', h.id, 'children');
+      onSnapshot(childProgressQuery, (childSnapshot) => {
+        childSnapshot.docs.forEach(childDoc => {
+          const progressUpdatesQuery = collection(firestore, `households/${h.id}/children/${childDoc.id}/childProgressUpdates`);
+          const progressUnsubscribe = onSnapshot(progressUpdatesQuery, (progressSnapshot) => {
+            const progressData = progressSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ChildProgressUpdate));
+            setAllProgressUpdates(prev => [...prev.filter(p => p.childId !== childDoc.id), ...progressData]);
+          });
+          unsubscribes.push(progressUnsubscribe);
+        });
+      });
+    });
     
-    fetchChildAndVisitData();
+    setChildrenLoading(false);
+    setVisitsLoading(false);
+    setProgressUpdatesLoading(false);
 
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
   }, [firestore, households, year]);
   
-  // Effect for initializing missing visits for the selected year
   useEffect(() => {
     const initializeVisits = async () => {
         if (!firestore || !user || !households || households.length === 0) return;
 
         for (const h of households) {
-            // CRITICAL: Only allow owners to create visits to align with security rules
             if (h.ownerId !== user.uid) {
                 continue;
             }
@@ -171,9 +177,14 @@ export function useFollowUpLogic(year: number) {
     initializeVisits();
   }, [firestore, user, households, year]);
 
-
   const quarters = useMemo(() => {
-    if (!allVisits || !households) return [];
+    if (!households || !allChildren.length) return [];
+
+    const getProgressForQuarter = (q: number) => {
+      const visits = allVisits.filter(v => getQuarter(new Date(v.visitDate)) === q && getYear(new Date(v.visitDate)) === year);
+      const visitIds = new Set(visits.map(v => v.id));
+      return allProgressUpdates.filter(p => visitIds.has(p.visit_id));
+    };
 
     return [1, 2, 3, 4].map((qNum) => {
       const quarterDate = new Date(year, (qNum - 1) * 3, 1);
@@ -194,7 +205,39 @@ export function useFollowUpLogic(year: number) {
       } else if (completedCount > 0) {
         status = 'Partially Completed';
       }
+
+      // New comparison logic
+      let improved = 0;
+      let declined = 0;
+      let noChange = 0;
+
+      if (qNum > 1) {
+        const currentQuarterProgress = getProgressForQuarter(qNum);
+        const previousQuarterProgress = getProgressForQuarter(qNum - 1);
+
+        const currentProgressByChild = new Map(currentQuarterProgress.map(p => [p.childId, p]));
+        const previousProgressByChild = new Map(previousQuarterProgress.map(p => [p.childId, p]));
+
+        allChildren.forEach(child => {
+          const current = currentProgressByChild.get(child.id);
+          const previous = previousProgressByChild.get(child.id);
+
+          if (current && previous) {
+            if (current.is_studying && !previous.is_studying) {
+              improved++;
+            } else if (!current.is_studying && previous.is_studying) {
+              declined++;
+            } else {
+              noChange++;
+            }
+          }
+        });
+      }
       
+      const currentQuarterProgress = getProgressForQuarter(qNum);
+      const childrenWithData = new Set(currentQuarterProgress.map(p => p.childId));
+      const notRecorded = allChildren.length - childrenWithData.size;
+
       return {
         id: qNum,
         name: `Quarter ${qNum} (${start.toLocaleString('default', {
@@ -204,11 +247,15 @@ export function useFollowUpLogic(year: number) {
         completed: completedCount,
         total: totalCount,
         visits: visitsForQuarter,
+        improved,
+        declined,
+        noChange,
+        notRecorded,
       };
     });
-  }, [year, allVisits, households]);
+  }, [year, allVisits, households, allChildren, allProgressUpdates]);
 
-  const isLoading = isUserLoading || householdsLoading || visitsLoading || childrenLoading;
+  const isLoading = isUserLoading || householdsLoading || visitsLoading || childrenLoading || progressUpdatesLoading;
 
-  return { quarters, households, children: allChildren, visits: allVisits, isLoading };
+  return { quarters, households, children: allChildren, visits: allVisits, progressUpdates: allProgressUpdates, isLoading };
 }
