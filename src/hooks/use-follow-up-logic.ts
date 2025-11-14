@@ -197,60 +197,74 @@ export function useFollowUpLogic(year: number) {
       if (!val) return null;
       // Firestore Timestamp
       if (typeof val === 'object' && typeof (val as any).toDate === 'function') {
-        return (val as any).toDate();
+        try { return (val as any).toDate(); } catch { return null; }
       }
       // ISO string
       if (typeof val === 'string') {
-        try {
-          return parseISO(val);
-        } catch {
-          return null;
-        }
+        try { return parseISO(val); } catch { return null; }
       }
       // native Date
       if (val instanceof Date) return val;
       return null;
     };
 
-    // helper to get progress updates for a set of visit ids
+    // build earliest visit map (householdId -> earliest visit Date)
+    const earliestVisitByHousehold = new Map<string, Date>();
+    allVisits.forEach(v => {
+      const vd = parseDateSafe(v.visitDate);
+      if (!vd) return;
+      const prev = earliestVisitByHousehold.get(v.householdId);
+      if (!prev || vd < prev) earliestVisitByHousehold.set(v.householdId, vd);
+    });
+
+    // Precompute an "effectiveCreatedDate" for each household to avoid repeating logic
+    const effectiveCreatedDateByHousehold = new Map<string, Date | null>();
+    households.forEach(h => {
+      const created = parseDateSafe(h.createdAt);
+      if (created) {
+        effectiveCreatedDateByHousehold.set(h.id, created);
+        return;
+      }
+      const earliestVisit = earliestVisitByHousehold.get(h.id) ?? null;
+      if (earliestVisit) {
+        effectiveCreatedDateByHousehold.set(h.id, earliestVisit);
+        return;
+      }
+      // no reliable date -> null (treat as unknown; will be excluded from past quarters)
+      effectiveCreatedDateByHousehold.set(h.id, null);
+    });
+
+    // Debug: print a snapshot of effective created dates (helps diagnose)
+    console.debug('[quarters] effectiveCreatedDateByHousehold:', Array.from(effectiveCreatedDateByHousehold.entries()).map(([id, d]) => ({ id, date: d ? d.toISOString() : null })));
+
     const getProgressForQuarter = (visitIds: Set<string>) =>
       allProgressUpdates.filter(p => visitIds.has(p.visit_id));
 
-    // We'll build one entry per quarter
     return [1, 2, 3, 4].map((qNum) => {
-      // quarter start/end (Dates)
       const quarterDate = new Date(year, (qNum - 1) * 3, 1);
       const start = startOfQuarter(quarterDate);
       const end = endOfQuarter(quarterDate);
 
-      // Build a map of earliest visit date per household to use as a fallback for missing createdAt
-      const earliestVisitByHousehold = new Map<string, Date>();
-      allVisits.forEach(v => {
-        const vd = parseDateSafe(v.visitDate);
-        if (!vd) return;
-        const prev = earliestVisitByHousehold.get(v.householdId);
-        if (!prev || vd < prev) earliestVisitByHousehold.set(v.householdId, vd);
+      // Determine households that existed on or before `end`
+      const householdsInQuarter = households.filter(h => {
+        const effective = effectiveCreatedDateByHousehold.get(h.id) ?? null;
+        // If we have no effective date, exclude for past quarters (freeze semantics).
+        if (!effective) return false;
+        // Include only if effective creation date is <= quarter end
+        return effective <= end;
       });
 
-      const householdsInQuarter = households.filter(h => {
-        const created = parseDateSafe(h.createdAt);
-        if (created) {
-          // included if created on or before quarter end
-          return created <= end;
-        }
-        // fallback: if createdAt missing, use earliest scheduled visit for this household
-        const earliestVisit = earliestVisitByHousehold.get(h.id);
-        if (earliestVisit) {
-          return earliestVisit <= end;
-        }
-        // no createdAt and no visits => exclude from past quarters (keeps them out of Qs that already finished)
-        return false;
+      // Debug: log which households were included/excluded for this quarter
+      console.debug('[quarters] quarter', qNum, 'start', start.toISOString(), 'end', end.toISOString());
+      households.forEach(h => {
+        const eff = effectiveCreatedDateByHousehold.get(h.id);
+        const included = eff ? (eff <= end) : false;
+        console.debug('[quarters] household', h.id, 'name', h.familyName || '(no name)', 'effectiveCreated', eff ? eff.toISOString() : null, 'includedInQ' + qNum, included);
       });
 
       const householdIdsInQuarter = new Set(householdsInQuarter.map(h => h.id));
       const totalCount = householdIdsInQuarter.size;
 
-      // visits that belong to households in this quarter and whose visitDate falls within start..end
       const visitsForQuarter = allVisits.filter((v) => {
         const visitDate = parseDateSafe(v.visitDate);
         if (!visitDate) return false;
@@ -259,7 +273,6 @@ export function useFollowUpLogic(year: number) {
 
       const completedCount = visitsForQuarter.filter(v => v.status === 'Completed').length;
 
-      // status logic
       let status: 'Completed' | 'Pending' | 'Partially Completed' = 'Pending';
       if (totalCount === 0) {
         status = 'Pending';
@@ -269,34 +282,24 @@ export function useFollowUpLogic(year: number) {
         status = 'Partially Completed';
       }
 
-      // progress comparison (improved/declined/noChange) vs previous quarter
+      // progress comparison vs previous quarter
       let improved = 0;
       let declined = 0;
       let noChange = 0;
 
-      // current quarter progress
       const currentVisitIds = new Set(visitsForQuarter.map(v => v.id));
       const currentQuarterProgress = getProgressForQuarter(currentVisitIds);
-
       const childrenInQuarter = allChildren.filter(child => householdIdsInQuarter.has(child.householdId));
 
       if (qNum > 1) {
-        // previous quarter interval
         const prevQuarterDate = new Date(year, (qNum - 2) * 3, 1);
         const prevStart = startOfQuarter(prevQuarterDate);
         const prevEnd = endOfQuarter(prevQuarterDate);
 
         const householdsInPrevQuarter = households.filter(h => {
-          const created = parseDateSafe(h.createdAt);
-          if (created) {
-            return created <= prevEnd;
-          }
-           // fallback: if createdAt missing, use earliest scheduled visit for this household
-          const earliestVisit = earliestVisitByHousehold.get(h.id);
-          if (earliestVisit) {
-            return earliestVisit <= prevEnd;
-          }
-          return false;
+          const effective = effectiveCreatedDateByHousehold.get(h.id) ?? null;
+          if (!effective) return false;
+          return effective <= prevEnd;
         });
 
         const householdIdsInPrevQuarter = new Set(householdsInPrevQuarter.map(h => h.id));
