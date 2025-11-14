@@ -151,7 +151,23 @@ export function useFollowUpLogic(year: number) {
                     const batch = writeBatch(firestore);
                     let batchHasWrites = false;
 
-                    for (let qNum = 1; qNum <= 4; qNum++) {
+                     // Compute the household's creation quarter (if available), otherwise allow all quarters.
+                    const parseDateSafe = (val: any) => {
+                      if (!val) return null;
+                      if (typeof val === 'object' && typeof (val as any).toDate === 'function') return (val as any).toDate();
+                      if (typeof val === 'string') return parseISO(val);
+                      if (val instanceof Date) return val;
+                      return null;
+                    };
+
+                    const createdAtDate = parseDateSafe((h as any).createdAt);
+                    const createdQuarter = createdAtDate ? getQuarter(createdAtDate) : 1;
+                    const createdYear = createdAtDate ? getYear(createdAtDate) : year;
+
+                    // Only consider the quarters of the same year. If created at a different year, fallback to full-year behavior.
+                    const startQ = (createdYear === year) ? createdQuarter : 1;
+
+                    for (let qNum = startQ; qNum <= 4; qNum++) {
                         if (!existingQuarters.has(qNum)) {
                             const quarterDate = new Date(year, (qNum - 1) * 3 + 1, 15);
                             const newVisitRef = doc(visitsColRef);
@@ -168,6 +184,7 @@ export function useFollowUpLogic(year: number) {
                             batchHasWrites = true;
                         }
                     }
+
                     if (batchHasWrites) {
                        batch.commit().catch(error => {
                            console.error(`Failed to commit batch for household ${h.id}:`, error);
@@ -245,7 +262,9 @@ export function useFollowUpLogic(year: number) {
       // Determine households that existed on or before `end`
       const householdsInQuarter = households.filter(h => {
         const effective = effectiveCreatedDateByHousehold.get(h.id) ?? null;
+        // If we have no effective date, exclude for past quarters (freeze semantics).
         if (!effective) return false;
+        // Include only if effective creation date is <= quarter end
         return effective <= end;
       });
 
@@ -343,3 +362,5 @@ export function useFollowUpLogic(year: number) {
 
   return { quarters, households, children: allChildren, visits: allVisits, progressUpdates: allProgressUpdates, isLoading };
 }
+
+    

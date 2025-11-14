@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useFirestore, useUser, useFirebaseApp } from '@/firebase';
-import { formatISO, addMonths, getYear } from 'date-fns';
+import { formatISO, addMonths, getYear, getQuarter } from 'date-fns';
 import { LocationPicker } from '@/components/map/location-picker';
 import { Button } from '@/components/ui/button';
 import {
@@ -389,10 +389,14 @@ export function RegisterHouseholdForm() {
         });
       });
 
+      // Determine which quarters to schedule visits for.
+      // Use the household createdAt as the start quarter so we don't create past-dated visits.
+      const createdDate = new Date(); // we set createdAt to now below
+      const createdQuarter = getQuarter(createdDate); // 1..4
       const visitsColRef = collection(householdRef, 'followUpVisits');
-      const year = getYear(new Date());
+      const year = getYear(createdDate);
 
-      for (let qNum = 1; qNum <= 4; qNum++) {
+      for (let qNum = createdQuarter; qNum <= 4; qNum++) {
         const quarterDate = new Date(year, (qNum - 1) * 3 + 1, 15);
         const newVisitRef = doc(visitsColRef);
         const newVisitData: Omit<FollowUpVisit, 'childProgressUpdates'> = {
@@ -640,3 +644,5 @@ export function RegisterHouseholdForm() {
     </Form>
   );
 }
+
+    
