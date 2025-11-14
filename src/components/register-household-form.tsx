@@ -292,12 +292,26 @@ export function RegisterHouseholdForm() {
 
         let finalFamilyPhotoUrl = 'https://picsum.photos/seed/default-family/600/400';
         if (familyPhotoFile) {
-            finalFamilyPhotoUrl = await uploadImage(familyPhotoFile, `households/${householdId}/familyPhoto.jpg`);
+            try {
+                finalFamilyPhotoUrl = await uploadImage(familyPhotoFile, `households/${householdId}/familyPhoto.jpg`);
+            } catch (error) {
+                console.error("Family photo upload failed:", error);
+                toast({ variant: "destructive", title: "Family Photo Upload Failed", description: "Could not upload the family photo. Please try again." });
+                setIsSubmitting(false);
+                return;
+            }
         }
 
         let finalHousePhotoUrl = 'https://picsum.photos/seed/default-house/600/400';
         if (housePhotoFile) {
-            finalHousePhotoUrl = await uploadImage(housePhotoFile, `households/${householdId}/housePhoto.jpg`);
+            try {
+                finalHousePhotoUrl = await uploadImage(housePhotoFile, `households/${householdId}/housePhoto.jpg`);
+            } catch (error) {
+                console.error("House photo upload failed:", error);
+                toast({ variant: "destructive", title: "House Photo Upload Failed", description: "Could not upload the house photo. Please try again." });
+                setIsSubmitting(false);
+                return;
+            }
         }
 
         const newHouseholdData = {
