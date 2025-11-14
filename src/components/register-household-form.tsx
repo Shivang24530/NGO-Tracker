@@ -265,124 +265,183 @@ export function RegisterHouseholdForm() {
     }
   }
 
-  const uploadImage = async (file: File, path: string): Promise<string> => {
+  // Upload with a timeout and better error messages
+  const uploadImage = async (file: File, path: string, timeoutMs = 30000): Promise<string> => {
+    if (!firebaseApp) throw new Error('Firebase App is not initialized');
     const storage = getStorage(firebaseApp);
     const imageRef = storageRef(storage, path);
-    await uploadBytes(imageRef, file);
-    const downloadURL = await getDownloadURL(imageRef);
-    return downloadURL;
+
+    // Upload -> then getDownloadURL
+    const uploadAndGetUrl = async () => {
+      await uploadBytes(imageRef, file);
+      const downloadURL = await getDownloadURL(imageRef);
+      return downloadURL;
+    };
+
+    // Race upload against a timeout so we never hang forever
+    return await Promise.race<string>([
+      uploadAndGetUrl(),
+      new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error(`Upload timed out after ${timeoutMs}ms`)), timeoutMs)
+      ),
+    ]);
   };
 
   async function onSubmit(values: FormData) {
     setIsSubmitting(true);
     if (!user) {
-        toast({
+      toast({
+        variant: "destructive",
+        title: "Authentication Error",
+        description: "You must be logged in to register a family.",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!firestore) {
+      toast({
+        variant: "destructive",
+        title: "Firestore Error",
+        description: "Firestore is not initialized.",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    // helpful debug logging
+    console.debug('[RegisterHousehold] submit started', { familyName: values.familyName });
+
+    try {
+      const batch = writeBatch(firestore);
+      const householdRef = doc(collection(firestore, 'households'));
+      const householdId = householdRef.id;
+
+      let finalFamilyPhotoUrl = 'https://picsum.photos/seed/default-family/600/400';
+      if (familyPhotoFile) {
+        try {
+          console.debug('[RegisterHousehold] uploading family photo', { householdId });
+          finalFamilyPhotoUrl = await uploadImage(familyPhotoFile, `households/${householdId}/familyPhoto.jpg`);
+          console.debug('[RegisterHousehold] family photo uploaded', { finalFamilyPhotoUrl });
+        } catch (err) {
+          console.error('Family photo upload failed:', err);
+          toast({
             variant: "destructive",
-            title: "Authentication Error",
-            description: "You must be logged in to register a family.",
+            title: "Family Photo Upload Failed",
+            description: "Could not upload the family photo. Please try again.",
+          });
+          setIsSubmitting(false);
+          return; // stop submission so user can retry
+        }
+      }
+
+      let finalHousePhotoUrl = 'https://picsum.photos/seed/default-house/600/400';
+      if (housePhotoFile) {
+        try {
+          console.debug('[RegisterHousehold] uploading house photo', { householdId });
+          finalHousePhotoUrl = await uploadImage(housePhotoFile, `households/${householdId}/housePhoto.jpg`);
+          console.debug('[RegisterHousehold] house photo uploaded', { finalHousePhotoUrl });
+        } catch (err) {
+          console.error('House photo upload failed:', err);
+          toast({
+            variant: "destructive",
+            title: "House Photo Upload Failed",
+            description: "Could not upload the house photo. Please try again.",
+          });
+          setIsSubmitting(false);
+          return; // stop submission so user can retry
+        }
+      }
+
+      const newHouseholdData = {
+        id: householdId,
+        ownerId: user.uid,
+        familyName: values.familyName,
+        fullAddress: values.fullAddress,
+        locationArea: values.locationArea,
+        primaryContact: values.primaryContact,
+        status: 'Active' as const,
+        nextFollowupDue: formatISO(addMonths(new Date(), 3)),
+        latitude: values.latitude,
+        longitude: values.longitude,
+        familyPhotoUrl: finalFamilyPhotoUrl,
+        housePhotoUrl: finalHousePhotoUrl,
+        toiletAvailable: false,
+        waterSupply: 'Other' as const,
+        electricity: false,
+        annualIncome: 0,
+      };
+
+      batch.set(householdRef, newHouseholdData);
+
+      (values.children || []).forEach(child => {
+        const childRef = doc(collection(householdRef, 'children'));
+        batch.set(childRef, {
+          id: childRef.id,
+          householdId: householdRef.id,
+          name: child.name,
+          dateOfBirth: child.dateOfBirth,
+          gender: child.gender,
+          isStudying: child.studyingStatus === 'Studying',
+          currentClass: child.currentClass || 'N/A',
+          schoolName: child.schoolName || 'N/A',
+        });
+      });
+
+      const visitsColRef = collection(householdRef, 'followUpVisits');
+      const year = getYear(new Date());
+
+      for (let qNum = 1; qNum <= 4; qNum++) {
+        const quarterDate = new Date(year, (qNum - 1) * 3 + 1, 15);
+        const newVisitRef = doc(visitsColRef);
+        const newVisitData: Omit<FollowUpVisit, 'childProgressUpdates'> = {
+          id: newVisitRef.id,
+          householdId: householdRef.id,
+          visitDate: formatISO(quarterDate),
+          visitType: qNum === 4 ? 'Annual' : 'Quarterly',
+          status: 'Pending',
+          visitedBy: '',
+          notes: '',
+        };
+        batch.set(newVisitRef, newVisitData);
+      }
+
+      try {
+        console.debug('[RegisterHousehold] committing batch', { householdId });
+        // add a safety timeout for the commit as well in case network stalls
+        const commitPromise = batch.commit();
+        const commitResult = await Promise.race([
+          commitPromise,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Commit timed out')), 20000)),
+        ]);
+        console.debug('[RegisterHousehold] batch committed', { householdId, commitResult });
+      } catch (err) {
+        console.error('Batch commit failed:', err);
+        toast({
+          variant: "destructive",
+          title: "Registration Failed",
+          description: "Could not save household data. Please try again.",
         });
         setIsSubmitting(false);
         return;
-    }
+      }
 
-    try {
-        const batch = writeBatch(firestore);
-        const householdRef = doc(collection(firestore, 'households'));
-        const householdId = householdRef.id;
+      toast({
+        title: 'Registration Complete!',
+        description: `The ${values.familyName} has been added to the system.`,
+      });
 
-        let finalFamilyPhotoUrl = 'https://picsum.photos/seed/default-family/600/400';
-        if (familyPhotoFile) {
-            try {
-                finalFamilyPhotoUrl = await uploadImage(familyPhotoFile, `households/${householdId}/familyPhoto.jpg`);
-            } catch (error) {
-                console.error("Family photo upload failed:", error);
-                toast({ variant: "destructive", title: "Family Photo Upload Failed", description: "Could not upload the family photo. Please try again." });
-                setIsSubmitting(false);
-                return;
-            }
-        }
-
-        let finalHousePhotoUrl = 'https://picsum.photos/seed/default-house/600/400';
-        if (housePhotoFile) {
-            try {
-                finalHousePhotoUrl = await uploadImage(housePhotoFile, `households/${householdId}/housePhoto.jpg`);
-            } catch (error) {
-                console.error("House photo upload failed:", error);
-                toast({ variant: "destructive", title: "House Photo Upload Failed", description: "Could not upload the house photo. Please try again." });
-                setIsSubmitting(false);
-                return;
-            }
-        }
-
-        const newHouseholdData = {
-          id: householdId,
-          ownerId: user.uid,
-          familyName: values.familyName,
-          fullAddress: values.fullAddress,
-          locationArea: values.locationArea,
-          primaryContact: values.primaryContact,
-          status: 'Active' as const,
-          nextFollowupDue: formatISO(addMonths(new Date(), 3)),
-          latitude: values.latitude,
-          longitude: values.longitude,
-          familyPhotoUrl: finalFamilyPhotoUrl,
-          housePhotoUrl: finalHousePhotoUrl,
-          toiletAvailable: false,
-          waterSupply: 'Other' as const,
-          electricity: false,
-          annualIncome: 0,
-        };
-
-        batch.set(householdRef, newHouseholdData);
-
-        values.children.forEach(child => {
-            const childRef = doc(collection(householdRef, 'children'));
-            batch.set(childRef, {
-                id: childRef.id,
-                householdId: householdRef.id,
-                name: child.name,
-                dateOfBirth: child.dateOfBirth,
-                gender: child.gender,
-                isStudying: child.studyingStatus === 'Studying',
-                currentClass: child.currentClass || 'N/A',
-                schoolName: child.schoolName || 'N/A',
-            });
-        });
-        
-        const visitsColRef = collection(householdRef, 'followUpVisits');
-        const year = getYear(new Date());
-
-        for (let qNum = 1; qNum <= 4; qNum++) {
-            const quarterDate = new Date(year, (qNum - 1) * 3 + 1, 15);
-            const newVisitRef = doc(visitsColRef);
-            const newVisitData: Omit<FollowUpVisit, 'childProgressUpdates'> = {
-                id: newVisitRef.id,
-                householdId: householdRef.id,
-                visitDate: formatISO(quarterDate),
-                visitType: qNum === 4 ? 'Annual' : 'Quarterly',
-                status: 'Pending',
-                visitedBy: '',
-                notes: '',
-            };
-            batch.set(newVisitRef, newVisitData);
-        }
-
-        await batch.commit();
-
-        toast({
-            title: 'Registration Complete!',
-            description: `The ${values.familyName} has been added to the system.`,
-        });
-        router.push('/dashboard');
+      // navigate away
+      router.push('/dashboard');
     } catch (error) {
-        console.error("Error registering family:", error);
-        toast({
-            variant: "destructive",
-            title: "Registration Failed",
-            description: "An error occurred while saving the data. Please try again.",
-        });
+      console.error("Error registering family (outer):", error);
+      toast({
+        variant: "destructive",
+        title: "Registration Failed",
+        description: "An error occurred while saving the data. Please try again.",
+      });
     } finally {
-        setIsSubmitting(false);
+      setIsSubmitting(false);
     }
   }
 

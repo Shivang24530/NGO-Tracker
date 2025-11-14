@@ -8,7 +8,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import { doc, writeBatch, collection, getDocs } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { useFirestore, useFirebaseApp } from '@/firebase';
+import { useFirestore, useFirebaseApp, useUser } from '@/firebase';
 import { LocationPicker } from '@/components/map/location-picker';
 import { Button } from '@/components/ui/button';
 import {
@@ -89,6 +89,7 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
   const router = useRouter();
   const firestore = useFirestore();
   const firebaseApp = useFirebaseApp();
+  const { user } = useUser();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [childrenToDelete, setChildrenToDelete] = useState<string[]>([]);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -186,15 +187,18 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
 
   async function onSubmit(values: FormData) {
     setIsSubmitting(true);
-    if (!firestore) {
+    if (!firestore || !user) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Firestore is not initialized.',
+        description: 'Firestore or user is not available.',
       });
       setIsSubmitting(false);
       return;
     }
+    
+    console.debug('[EditHousehold] submit started', { householdId: household.id });
+
     try {
         const batch = writeBatch(firestore);
         const householdRef = doc(firestore, 'households', household.id);
@@ -243,6 +247,7 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
                 batch.set(newChildRef, { 
                     id: newChildRef.id,
                     householdId: household.id,
+                    ownerId: user.uid,
                     name: child.name,
                     dateOfBirth: child.dateOfBirth,
                     gender: child.gender,
@@ -253,7 +258,20 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
             }
         });
         
-        await batch.commit();
+        try {
+            console.debug('[EditHousehold] committing batch', { householdId: household.id });
+            await batch.commit();
+            console.debug('[EditHousehold] batch committed', { householdId: household.id });
+        } catch (err) {
+            console.error('Batch commit failed:', err);
+            toast({
+                variant: "destructive",
+                title: "Update Failed",
+                description: "Could not save household data. Please try again.",
+            });
+            setIsSubmitting(false);
+            return;
+        }
 
         toast({
             title: 'Update Complete!',
