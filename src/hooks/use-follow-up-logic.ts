@@ -145,7 +145,7 @@ export function useFollowUpLogic(year: number) {
                 
                 if (existingVisitsSnapshot.size < 4) {
                     const existingQuarters = new Set(
-                        existingVisitsSnapshot.docs.map(d => getQuarter(new Date((d.data() as FollowUpVisit).visitDate)))
+                        existingVisitsSnapshot.docs.map(d => getQuarter(parseISO((d.data() as FollowUpVisit).visitDate)))
                     );
                     
                     const batch = writeBatch(firestore);
@@ -233,10 +233,7 @@ export function useFollowUpLogic(year: number) {
       // no reliable date -> null (treat as unknown; will be excluded from past quarters)
       effectiveCreatedDateByHousehold.set(h.id, null);
     });
-
-    // Debug: print a snapshot of effective created dates (helps diagnose)
-    console.debug('[quarters] effectiveCreatedDateByHousehold:', Array.from(effectiveCreatedDateByHousehold.entries()).map(([id, d]) => ({ id, date: d ? d.toISOString() : null })));
-
+    
     const getProgressForQuarter = (visitIds: Set<string>) =>
       allProgressUpdates.filter(p => visitIds.has(p.visit_id));
 
@@ -248,18 +245,8 @@ export function useFollowUpLogic(year: number) {
       // Determine households that existed on or before `end`
       const householdsInQuarter = households.filter(h => {
         const effective = effectiveCreatedDateByHousehold.get(h.id) ?? null;
-        // If we have no effective date, exclude for past quarters (freeze semantics).
         if (!effective) return false;
-        // Include only if effective creation date is <= quarter end
         return effective <= end;
-      });
-
-      // Debug: log which households were included/excluded for this quarter
-      console.debug('[quarters] quarter', qNum, 'start', start.toISOString(), 'end', end.toISOString());
-      households.forEach(h => {
-        const eff = effectiveCreatedDateByHousehold.get(h.id);
-        const included = eff ? (eff <= end) : false;
-        console.debug('[quarters] household', h.id, 'name', h.familyName || '(no name)', 'effectiveCreated', eff ? eff.toISOString() : null, 'includedInQ' + qNum, included);
       });
 
       const householdIdsInQuarter = new Set(householdsInQuarter.map(h => h.id));
@@ -342,6 +329,7 @@ export function useFollowUpLogic(year: number) {
         completed: completedCount,
         total: totalCount,
         visits: visitsForQuarter,
+        householdsInQuarter: householdsInQuarter, // Pass the filtered households to the UI
         improved,
         declined,
         noChange,

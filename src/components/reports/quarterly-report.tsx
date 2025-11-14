@@ -179,7 +179,7 @@ function QuarterlyReportContent() {
           defaultValue={`item-${getQuarter(new Date())}`}
         >
           {quarters.map((quarter) => {
-            const completionPercentage = !households ? 0 : (quarter.completed / quarter.total) * 100;
+            const completionPercentage = quarter.total === 0 ? 0 : (quarter.completed / quarter.total) * 100;
             const isPastQuarter = year < currentYear || (year === currentYear && quarter.id < currentQuarterNum);
             
             return (
@@ -277,8 +277,8 @@ function QuarterlyReportContent() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {households && households.length > 0 ? (
-                            households.map(household => {
+                          {quarter.householdsInQuarter && quarter.householdsInQuarter.length > 0 ? (
+                            quarter.householdsInQuarter.map(household => {
                               const visit = quarter.visits.find(v => v.householdId === household.id);
                               const visitStatus = visit?.status || 'Pending';
                               const isActionable = visitStatus !== 'Completed' && !isPastQuarter;
@@ -322,7 +322,7 @@ function QuarterlyReportContent() {
                             })
                           ) : (
                             <TableRow>
-                              <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">No families registered in the system.</TableCell>
+                              <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">No families were registered in this quarter.</TableCell>
                             </TableRow>
                           )}
                         </TableBody>
