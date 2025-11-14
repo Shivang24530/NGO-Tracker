@@ -69,8 +69,8 @@ const formSchema = z.object({
   children: z.array(childSchema),
 
   // Step 3
-  familyPhotoFile: z.instanceof(File).optional(),
-  housePhotoFile: z.instanceof(File).optional(),
+  familyPhotoFile: z.any().optional(),
+  housePhotoFile: z.any().optional(),
   familyPhotoUrl: z.string().optional(), // For displaying preview
   housePhotoUrl: z.string().optional(), // For displaying preview
 });
@@ -562,3 +562,5 @@ export function RegisterHouseholdForm() {
     </Form>
   );
 }
+
+    
