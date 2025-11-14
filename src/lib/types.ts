@@ -1,3 +1,4 @@
+
 export type Household = {
   id: string;
   ownerId: string; // ID of the user who registered the household
@@ -6,6 +7,7 @@ export type Household = {
   locationArea: string;
   primaryContact: string;
   status: 'Active' | 'Migrated' | 'Inactive';
+  createdAt: string; // ISO date string
   nextFollowupDue: string; // ISO date string
   latitude: number;
   longitude: number;

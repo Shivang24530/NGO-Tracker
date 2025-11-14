@@ -178,7 +178,7 @@ export function useFollowUpLogic(year: number) {
   }, [firestore, user, households, year]);
 
   const quarters = useMemo(() => {
-    if (!households || !allChildren.length) return [];
+    if (!households) return [];
 
     const getProgressForQuarter = (q: number) => {
       const visits = allVisits.filter(v => getQuarter(new Date(v.visitDate)) === q && getYear(new Date(v.visitDate)) === year);
@@ -191,16 +191,23 @@ export function useFollowUpLogic(year: number) {
       const start = startOfQuarter(quarterDate);
       const end = endOfQuarter(quarterDate);
 
+      // Filter households that existed by the end of this quarter
+      const householdsInQuarter = households.filter(h => new Date(h.createdAt) <= end);
+
       const visitsForQuarter = allVisits.filter(
-        (v) => getQuarter(new Date(v.visitDate)) === qNum && getYear(new Date(v.visitDate)) === year
+        (v) => householdsInQuarter.some(h => h.id === v.householdId) &&
+               getQuarter(new Date(v.visitDate)) === qNum &&
+               getYear(new Date(v.visitDate)) === year
       );
 
       const completedCount = visitsForQuarter.filter(v => v.status === 'Completed').length;
-      const totalCount = households.length;
+      const totalCount = householdsInQuarter.length;
       const allCompleted = totalCount > 0 && completedCount === totalCount;
 
       let status: 'Completed' | 'Pending' | 'Partially Completed' = 'Pending';
-      if (allCompleted) {
+      if (totalCount === 0) {
+        status = 'Pending'; // Or another status for no families
+      } else if (allCompleted) {
         status = 'Completed';
       } else if (completedCount > 0) {
         status = 'Partially Completed';
@@ -211,6 +218,8 @@ export function useFollowUpLogic(year: number) {
       let declined = 0;
       let noChange = 0;
 
+      const childrenInQuarter = allChildren.filter(c => householdsInQuarter.some(h => h.id === c.householdId));
+
       if (qNum > 1) {
         const currentQuarterProgress = getProgressForQuarter(qNum);
         const previousQuarterProgress = getProgressForQuarter(qNum - 1);
@@ -218,7 +227,7 @@ export function useFollowUpLogic(year: number) {
         const currentProgressByChild = new Map(currentQuarterProgress.map(p => [p.childId, p]));
         const previousProgressByChild = new Map(previousQuarterProgress.map(p => [p.childId, p]));
 
-        allChildren.forEach(child => {
+        childrenInQuarter.forEach(child => {
           const current = currentProgressByChild.get(child.id);
           const previous = previousProgressByChild.get(child.id);
 
@@ -236,7 +245,7 @@ export function useFollowUpLogic(year: number) {
       
       const currentQuarterProgress = getProgressForQuarter(qNum);
       const childrenWithData = new Set(currentQuarterProgress.map(p => p.childId));
-      const notRecorded = allChildren.length - childrenWithData.size;
+      const notRecorded = childrenInQuarter.length - childrenWithData.size;
 
       return {
         id: qNum,

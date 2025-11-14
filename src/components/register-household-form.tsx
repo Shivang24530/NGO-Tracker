@@ -361,6 +361,7 @@ export function RegisterHouseholdForm() {
         locationArea: values.locationArea,
         primaryContact: values.primaryContact,
         status: 'Active' as const,
+        createdAt: formatISO(new Date()),
         nextFollowupDue: formatISO(addMonths(new Date(), 3)),
         latitude: values.latitude,
         longitude: values.longitude,
