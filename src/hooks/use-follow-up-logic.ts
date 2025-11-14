@@ -76,18 +76,21 @@ export function useFollowUpLogic(year: number) {
       const childrenUnsubscribe = onSnapshot(childrenQuery, (snapshot) => {
         const childrenData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Child));
         setAllChildren(prev => [...prev.filter(c => c.householdId !== h.id), ...childrenData]);
-      });
+      }, (error) => console.error(`Error fetching children for household ${h.id}:`, error));
       unsubscribes.push(childrenUnsubscribe);
+
+      const start = startOfYear(new Date(year, 0, 1));
+      const end = endOfYear(new Date(year, 11, 31));
 
       const visitsQuery = query(
         collection(firestore, 'households', h.id, 'followUpVisits'),
-        where('visitDate', '>=', startOfYear(new Date(year, 0, 1)).toISOString()),
-        where('visitDate', '<=', endOfYear(new Date(year, 11, 31)).toISOString())
+        where('visitDate', '>=', formatISO(start)),
+        where('visitDate', '<=', formatISO(end))
       );
       const visitsUnsubscribe = onSnapshot(visitsQuery, (snapshot) => {
         const visitsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as FollowUpVisit));
         setAllVisits(prev => [...prev.filter(v => v.householdId !== h.id), ...visitsData]);
-      });
+      }, (error) => console.error(`Error fetching visits for household ${h.id}:`, error));
       unsubscribes.push(visitsUnsubscribe);
 
       const childProgressQuery = collection(firestore, 'households', h.id, 'children');
@@ -97,7 +100,7 @@ export function useFollowUpLogic(year: number) {
           const progressUnsubscribe = onSnapshot(progressUpdatesQuery, (progressSnapshot) => {
             const progressData = progressSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ChildProgressUpdate));
             setAllProgressUpdates(prev => [...prev.filter(p => p.childId !== childDoc.id), ...progressData]);
-          });
+          }, (error) => console.error(`Error fetching progress for child ${childDoc.id}:`, error));
           unsubscribes.push(progressUnsubscribe);
         });
       });
@@ -125,8 +128,8 @@ export function useFollowUpLogic(year: number) {
                 const visitsColRef = collection(firestore, `households/${h.id}/followUpVisits`);
                 const yearQuery = query(
                     visitsColRef,
-                    where('visitDate', '>=', startOfYear(new Date(year, 0, 1)).toISOString()),
-                    where('visitDate', '<=', endOfYear(new Date(year, 11, 31)).toISOString())
+                    where('visitDate', '>=', formatISO(startOfYear(new Date(year, 0, 1)))),
+                    where('visitDate', '<=', formatISO(endOfYear(new Date(year, 11, 31))))
                 );
                 
                 const existingVisitsSnapshot = await getDocs(yearQuery);
@@ -202,12 +205,10 @@ export function useFollowUpLogic(year: number) {
 
       const completedCount = visitsForQuarter.filter(v => v.status === 'Completed').length;
       const totalCount = householdsInQuarter.length;
-      const allCompleted = totalCount > 0 && completedCount === totalCount;
-
       let status: 'Completed' | 'Pending' | 'Partially Completed' = 'Pending';
       if (totalCount === 0) {
-        status = 'Pending'; // Or another status for no families
-      } else if (allCompleted) {
+        status = 'Pending';
+      } else if (totalCount > 0 && completedCount === totalCount) {
         status = 'Completed';
       } else if (completedCount > 0) {
         status = 'Partially Completed';
