@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 
 type LatLng = {
@@ -17,16 +17,29 @@ interface LocationPickerProps {
 }
 
 export function LocationPicker({ apiKey, initialCenter, onLocationChange, currentLocation }: LocationPickerProps) {
+  const [markerPosition, setMarkerPosition] = useState(currentLocation);
+
+  useEffect(() => {
+    if (currentLocation && currentLocation.lat && currentLocation.lng) {
+      setMarkerPosition(currentLocation);
+    } else {
+      setMarkerPosition(initialCenter);
+    }
+  }, [currentLocation, initialCenter]);
 
   const handleDragEnd = (e: google.maps.MapMouseEvent) => {
     if (e.latLng) {
-      onLocationChange(e.latLng.lat(), e.latLng.lng());
+      const newPos = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+      setMarkerPosition(newPos);
+      onLocationChange(newPos.lat, newPos.lng);
     }
   };
 
   const handleMapClick = (e: google.maps.MapMouseEvent) => {
     if (e.latLng) {
-      onLocationChange(e.latLng.lat(), e.latLng.lng());
+      const newPos = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+      setMarkerPosition(newPos);
+      onLocationChange(newPos.lat, newPos.lng);
     }
   };
 
@@ -40,11 +53,13 @@ export function LocationPicker({ apiKey, initialCenter, onLocationChange, curren
         mapId={'f5d968a3556f272b'}
         onClick={handleMapClick}
       >
-        <AdvancedMarker
-          position={currentLocation}
-          draggable={true}
-          onDragEnd={handleDragEnd}
-        />
+        {markerPosition && markerPosition.lat && markerPosition.lng && (
+          <AdvancedMarker
+            position={markerPosition}
+            draggable={true}
+            onDragEnd={handleDragEnd}
+          />
+        )}
       </Map>
     </APIProvider>
   );
