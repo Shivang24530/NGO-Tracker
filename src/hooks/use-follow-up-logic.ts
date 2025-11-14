@@ -252,7 +252,7 @@ export function useFollowUpLogic(year: number) {
     });
     
     const getProgressForQuarter = (visitIds: Set<string>) =>
-      allProgressUpdates.filter(p => visitIds.has(p.visit_id));
+      allProgressUpdates.filter(p => visitIds.has(p.visitId));
 
     return [1, 2, 3, 4].map((qNum) => {
       const quarterDate = new Date(year, (qNum - 1) * 3, 1);
