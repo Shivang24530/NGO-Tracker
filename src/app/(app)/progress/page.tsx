@@ -21,7 +21,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useCollection, useDoc, useFirestore, useUser, useMemoFirebase } from '@/firebase';
-import { collection, doc, query, collectionGroup, getDocs } from 'firebase/firestore';
+import { collection, doc, query, collectionGroup, getDocs, where } from 'firebase/firestore';
 import type { Child, Household } from '@/lib/types';
 import { useEffect, useState, useMemo } from 'react';
 
@@ -33,19 +33,17 @@ export default function ProgressTrackingPage() {
   const [childrenLoading, setChildrenLoading] = useState(true);
 
   const householdsQuery = useMemoFirebase(
-    () => (firestore ? query(collection(firestore, 'households')) : null),
-    [firestore]
+    () => (firestore && user ? query(collection(firestore, 'households'), where('ownerId', '==', user.uid)) : null),
+    [firestore, user]
   );
   const { data: households, isLoading: householdsLoading } = useCollection<Household>(householdsQuery);
 
   useEffect(() => {
-    // Wait until firestore is available and the initial households load is complete.
-    if (!firestore || households === null) {
+    if (households === null) {
       setChildrenLoading(true);
       return;
     }
 
-    // If households has loaded but is an empty array, there's nothing to fetch.
     if (households.length === 0) {
       setAllChildren([]);
       setChildrenLoading(false);
@@ -53,6 +51,7 @@ export default function ProgressTrackingPage() {
     }
 
     const fetchAllChildren = async () => {
+      if (!firestore) return;
       setChildrenLoading(true);
       const childrenPromises = households.map(h => 
         getDocs(collection(firestore, 'households', h.id, 'children'))
@@ -65,7 +64,7 @@ export default function ProgressTrackingPage() {
         setAllChildren(childrenData);
       } catch (error) {
         console.error("Error fetching children data:", error);
-        setAllChildren([]); // Clear on error
+        setAllChildren([]);
       } finally {
         setChildrenLoading(false);
       }
