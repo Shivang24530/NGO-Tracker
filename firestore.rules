@@ -17,42 +17,37 @@ service cloud.firestore {
 
     // households/{householdId}
     match /households/{householdId} {
-      // Any authenticated user can create a household, as long as they are the owner.
+      // Allow authenticated users to list & get households (admins/field workers)
+      allow list, get: if isSignedIn();
+      
+      // Allow create only if request.auth.uid matches request.resource.data.ownerId.
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       
-      // Allow any authenticated user to query the households collection,
-      // as long as the query is filtered by their ownerId.
-      allow list: if isSignedIn() && request.auth.uid == request.query.filters.ownerId.string_value;
-
-      // Only the owner can get, update or delete their household document.
-      allow get, update, delete: if isOwner(resource);
+      // Only the owner can update or delete their household document
+      allow update, delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
       
       // Children subcollection
       match /children/{childId} {
-        // Only the owner of the parent household can manage their children's data.
-        allow read, write: if isOwner(get(/databases/$(database)/documents/households/$(householdId)));
+        // authenticated users (admins/field workers) can read/write here
+        allow read, write: if isSignedIn();
       }
       
       // FollowUpVisits subcollection
       match /followUpVisits/{visitId} {
-        // Only the owner of the parent household can manage their follow-up visits.
-        allow read, write: if isOwner(get(/databases/$(database)/documents/households/$(householdId)));
+        // authenticated users (admins/field workers) can read/write here
+        allow read, write: if isSignedIn();
       }
 
       // ChildProgressUpdates nested subcollection
       match /children/{childId}/childProgressUpdates/{updateId} {
-        // Only the owner of the grandparent household can manage progress updates.
-        allow read, write: if isOwner(get(/databases/$(database)/documents/households/$(householdId)));
+        // authenticated users (admins/field workers) can read/write here
+        allow read, write: if isSignedIn();
       }
     }
 
-    // This rule allows a user to perform a collection group query on 'children'
-    // ONLY if the query is filtered to their own households. This is not
-    // directly enforceable in rules for 'list', so the app MUST apply the
-    // where('ownerId', '==', request.auth.uid) filter on the parent collection.
-    // The 'read' rule here secures direct gets to child documents via a collection group query.
+    // Optional: allow authenticated read across any 'children' path (collection group)
     match /{path=**}/children/{childId} {
-      allow read: if isOwner(get(/databases/$(database)/documents/households/$(path[1])));
+      allow read: if isSignedIn();
     }
   }
 }
