@@ -223,17 +223,28 @@ export function useFollowUpLogic(year: number) {
       const start = startOfQuarter(quarterDate);
       const end = endOfQuarter(quarterDate);
 
-      // Determine households that existed on or before `end`
+      // Build a map of earliest visit date per household to use as a fallback for missing createdAt
+      const earliestVisitByHousehold = new Map<string, Date>();
+      allVisits.forEach(v => {
+        const vd = parseDateSafe(v.visitDate);
+        if (!vd) return;
+        const prev = earliestVisitByHousehold.get(v.householdId);
+        if (!prev || vd < prev) earliestVisitByHousehold.set(v.householdId, vd);
+      });
+
       const householdsInQuarter = households.filter(h => {
         const created = parseDateSafe(h.createdAt);
-        if (!created) {
-          // If createdAt is missing, treat as: (a) decide fallback policy.
-          // We'll treat missing createdAt as "created now" to avoid retroactively
-          // adding them to past quarters. If you want the opposite (treat
-          // missing as very old), change to `new Date(0)`.
-          return false; // exclude unknown-created households from past quarters
+        if (created) {
+          // included if created on or before quarter end
+          return created <= end;
         }
-        return created <= end;
+        // fallback: if createdAt missing, use earliest scheduled visit for this household
+        const earliestVisit = earliestVisitByHousehold.get(h.id);
+        if (earliestVisit) {
+          return earliestVisit <= end;
+        }
+        // no createdAt and no visits => exclude from past quarters (keeps them out of Qs that already finished)
+        return false;
       });
 
       const householdIdsInQuarter = new Set(householdsInQuarter.map(h => h.id));
@@ -277,10 +288,15 @@ export function useFollowUpLogic(year: number) {
 
         const householdsInPrevQuarter = households.filter(h => {
           const created = parseDateSafe(h.createdAt);
-          if (!created) {
-            return false;
+          if (created) {
+            return created <= prevEnd;
           }
-          return created <= prevEnd;
+           // fallback: if createdAt missing, use earliest scheduled visit for this household
+          const earliestVisit = earliestVisitByHousehold.get(h.id);
+          if (earliestVisit) {
+            return earliestVisit <= prevEnd;
+          }
+          return false;
         });
 
         const householdIdsInPrevQuarter = new Set(householdsInPrevQuarter.map(h => h.id));
