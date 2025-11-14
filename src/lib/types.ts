@@ -46,7 +46,7 @@ export type FollowUpVisit = {
 export type ChildProgressUpdate = {
   id: string;
   child_id: string;
-  visit_id: string;
+  visitId: string;
   is_studying: boolean;
   not_studying_reason?: 'Financial Problems' | 'Working' | 'Family Issues' | 'Lack of Interest' | 'Other';
   is_working: boolean;

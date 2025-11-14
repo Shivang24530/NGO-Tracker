@@ -72,6 +72,7 @@ function QuarterlyReportContent() {
       const completedVisits = quarter.visits.filter(v => v.status === 'Completed');
       if(completedVisits.length === 0){
          toast({ title: 'No completed surveys to report.'});
+         setIsDownloading(false);
          return;
       }
 
@@ -90,7 +91,7 @@ function QuarterlyReportContent() {
 
         for (const child of householdChildren) {
           const progressUpdatesRef = collection(firestore, `households/${household.id}/children/${child.id}/childProgressUpdates`);
-          const q = query(progressUpdatesRef, where('visit_id', '==', visit.id));
+          const q = query(progressUpdatesRef, where('visitId', '==', visit.id));
           const querySnapshot = await getDocs(q);
           
           if (!querySnapshot.empty) {
@@ -117,6 +118,7 @@ function QuarterlyReportContent() {
       
       if (rows.length === 0) {
           toast({ title: 'No data to report.'});
+          setIsDownloading(false);
           return;
       }
 
@@ -198,6 +200,7 @@ function QuarterlyReportContent() {
                           'Completed': 'bg-green-100 text-green-800 border-green-200',
                           'Incomplete': 'bg-red-100 text-red-800 border-red-200',
                           'Pending': 'bg-orange-100 text-orange-800 border-orange-200',
+                          'Partially Completed': 'bg-blue-100 text-blue-800 border-blue-200',
                         }[quarter.status] || 'bg-gray-100'}
                       >
                         {quarter.status === 'Completed' && <CheckCircle2 className="mr-1 h-3 w-3" />}

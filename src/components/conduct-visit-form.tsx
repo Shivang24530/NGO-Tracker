@@ -114,7 +114,7 @@ export function ConductVisitForm({ visit, household, children }: ConductVisitFor
             const progressUpdateRef = doc(collection(firestore, `households/${household.id}/children/${update.childId}/childProgressUpdates`));
             batch.set(progressUpdateRef, {
                 id: progressUpdateRef.id,
-                childId: update.childId,
+                child_id: update.childId,
                 visitId: visit.id,
                 is_studying: update.isStudying,
                 not_studying_reason: update.notStudyingReason,
@@ -376,5 +376,3 @@ export function ConductVisitForm({ visit, household, children }: ConductVisitFor
     </Form>
   );
 }
-
-    
