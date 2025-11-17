@@ -1,46 +1,39 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // households/{householdId}
-    match /households/{householdId} {
-      // Allow authenticated users to list & get households (admins/field workers)
-      allow list, get: if isSignedIn();
-      
-      // Allow create only if request.auth.uid matches request.resource.data.ownerId.
-      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
-      
-      // Only the owner can update or delete their household document
-      allow update, delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
-      
-      // Children subcollection
-      match /children/{childId} {
-        // authenticated users (admins/field workers) can read/write here
-        allow read, write: if isSignedIn();
-      }
-      
-      // FollowUpVisits subcollection
-      match /followUpVisits/{visitId} {
-        // authenticated users (admins/field workers) can read/write here
-        allow read, write: if isSignedIn();
-      }
-
-      // ChildProgressUpdates nested subcollection
-      match /children/{childId}/childProgressUpdates/{updateId} {
-        // authenticated users (admins/field workers) can read/write here
-        allow read, write: if isSignedIn();
-      }
+    function isOwner(userId) {
+      return request.auth.uid == userId;
     }
 
-    // Optional: allow authenticated read across any 'children' path (collection group)
-    match /{path=**}/children/{childId} {
+    // DASHBOARD: Logged-in users can read general dashboard stats
+    match /stats/dashboard {
       allow read: if isSignedIn();
+    }
+
+    // HOUSEHOLDS: Users can only read/write households they own.
+    match /households/{householdId} {
+      allow read, write: if isOwner(resource.data.ownerId);
+
+      // CHILDREN & VISITS: Users can manage children and visits for households they own.
+      match /children/{childId} {
+        allow read, write: if isOwner(get(/databases/$(database)/documents/households/$(householdId)).data.ownerId);
+      }
+
+      match /followUpVisits/{visitId} {
+        allow read, write: if isOwner(get(/databases/$(database)/documents/households/$(householdId)).data.ownerId);
+      }
+    }
+    
+    // USERS: A user can only access their own user document.
+    match /users/{userId} {
+        allow read, write: if isOwner(userId);
     }
   }
 }
