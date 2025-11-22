@@ -18,11 +18,15 @@ import { initiateEmailSignIn } from '@/firebase/non-blocking-login';
 import { useEffect, useState } from 'react';
 import { useUser } from '@/firebase';
 import { Loader2 } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function LoginPage() {
   const router = useRouter();
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
+
+  const { t } = useLanguage();
+
   const [email, setEmail] = useState('priya@example.com');
   const [password, setPassword] = useState('password');
 
@@ -53,38 +57,48 @@ export default function LoginPage() {
             <Compass className="w-12 h-12 text-primary" />
           </div>
           <CardTitle className="font-headline text-3xl">
-            Community Compass
+            {t("app_name")}
           </CardTitle>
           <CardDescription>
-            Welcome back! Please log in to your account.
+            {t("login_subtitle")}
           </CardDescription>
         </CardHeader>
+
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
+            
             <div className="space-y-2">
-              <Label htmlFor="email" className="font-headline">Email</Label>
+              <Label htmlFor="email" className="font-headline">
+                {t("email")}
+              </Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="priya@example.com"
+                placeholder={t("email_placeholder")}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="password" className="font-headline">Password</Label>
+              <Label htmlFor="password" className="font-headline">
+                {t("password")}
+              </Label>
               <Input 
                 id="password" 
                 type="password" 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                required />
+                required 
+              />
             </div>
+
           </CardContent>
+
           <CardFooter>
             <Button type="submit" className="w-full font-headline">
-              Log In
+              {t("login_button")}
             </Button>
           </CardFooter>
         </form>

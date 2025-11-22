@@ -1,5 +1,5 @@
-
 'use client';
+
 import { PageHeader } from '@/components/common/page-header';
 import {
   Table,
@@ -20,9 +20,23 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, Pen, Trash2, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { useCollection, useFirestore, useUser, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
+import {
+  useCollection,
+  useFirestore,
+  useUser,
+  useMemoFirebase,
+  errorEmitter,
+  FirestorePermissionError,
+} from '@/firebase';
 import type { Household } from '@/lib/types';
-import { doc, getDocs, collection, writeBatch, query, where } from 'firebase/firestore';
+import {
+  doc,
+  getDocs,
+  collection,
+  writeBatch,
+  query,
+  where,
+} from 'firebase/firestore';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,18 +56,25 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function AllHouseholdsPage() {
+  const { t } = useLanguage();
+
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
   const router = useRouter();
 
   const householdsQuery = useMemoFirebase(
-    () => (firestore && user ? query(collection(firestore, 'households'), where('ownerId', '==', user.uid)) : null),
+    () =>
+      firestore && user
+        ? query(collection(firestore, 'households'), where('ownerId', '==', user.uid))
+        : null,
     [firestore, user]
   );
-  
-  const { data: households, isLoading } = useCollection<Household>(householdsQuery);
+
+  const { data: households, isLoading } =
+    useCollection<Household>(householdsQuery);
 
   const finalIsLoading = isUserLoading || isLoading;
 
@@ -64,144 +85,172 @@ export default function AllHouseholdsPage() {
 
     const batch = writeBatch(firestore);
 
-    // This is a simplified deletion. In a real app with many sub-collections,
-    // you'd need a Cloud Function for recursive deletion to avoid leaving orphaned data.
     const childrenSnapshot = await getDocs(collection(householdDocRef, 'children'));
-    childrenSnapshot.forEach(doc => batch.delete(doc.ref));
+    childrenSnapshot.forEach((doc) => batch.delete(doc.ref));
 
     const visitsSnapshot = await getDocs(collection(householdDocRef, 'followUpVisits'));
-    visitsSnapshot.forEach(doc => batch.delete(doc.ref));
+    visitsSnapshot.forEach((doc) => batch.delete(doc.ref));
 
-    // Delete the household document itself
     batch.delete(householdDocRef);
 
-    batch.commit()
+    batch
+      .commit()
       .then(() => {
         toast({
-            title: 'Family Deleted',
-            description: `The ${familyName} family and all associated data have been removed.`,
+          title: t("family_deleted"),
+          description: `${familyName} ${t("family_deleted_desc")}`,
         });
         router.refresh();
       })
       .catch((error) => {
-        console.error("Error deleting household:", error);
-        // Create and emit the detailed permission error
+        console.error('Error deleting household:', error);
+
         const permissionError = new FirestorePermissionError({
-            path: householdDocRef.path,
-            operation: 'delete',
+          path: householdDocRef.path,
+          operation: 'delete',
         });
         errorEmitter.emit('permission-error', permissionError);
 
-        // Also show a generic toast to the user
         toast({
-            variant: "destructive",
-            title: 'Deletion Failed',
-            description: 'There was an error deleting the family data. Check the console for details.',
+          variant: 'destructive',
+          title: t("deletion_failed"),
+          description: t("deletion_failed_desc"),
         });
       });
   };
 
-
   return (
     <div className="flex min-h-screen w-full flex-col">
-      <PageHeader title="All Your Families" />
+      <PageHeader title={t("all_families")} />
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
         <Card>
           <CardHeader>
-            <CardTitle>Family Directory</CardTitle>
+            <CardTitle>{t("family_directory")}</CardTitle>
             <CardDescription>
-              A list of all families you have registered in the system.
+              {t("family_directory_desc")}
             </CardDescription>
           </CardHeader>
+
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Family Name</TableHead>
-                  <TableHead>Location Area</TableHead>
-                  <TableHead>Primary Contact</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("family_name")}</TableHead>
+                  <TableHead>{t("location_area")}</TableHead>
+                  <TableHead>{t("primary_contact")}</TableHead>
+                  <TableHead>{t("status")}</TableHead>
+                  <TableHead className="text-right">{t("actions")}</TableHead>
                 </TableRow>
               </TableHeader>
+
               <TableBody>
                 {finalIsLoading && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center">
-                      Loading family information...
+                      {t("loading_families")}
                     </TableCell>
                   </TableRow>
                 )}
+
                 {!finalIsLoading && households && households.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center">
-                      No families registered yet.
+                      {t("no_families")}
                     </TableCell>
                   </TableRow>
                 )}
-                {households && households.map((household) => (
-                  <TableRow key={household.id}>
-                    <TableCell className="font-medium">{household.familyName}</TableCell>
-                    <TableCell>{household.locationArea}</TableCell>
-                    <TableCell>{household.primaryContact}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={household.status === 'Active' ? 'default' : 'secondary'}
-                        className={household.status === 'Active' ? 'bg-green-100 text-green-800' : ''}
-                      >
-                        {household.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                       <AlertDialog>
+
+                {households &&
+                  households.map((household) => (
+                    <TableRow key={household.id}>
+                      <TableCell className="font-medium">
+                        {household.familyName}
+                      </TableCell>
+                      <TableCell>{household.locationArea}</TableCell>
+                      <TableCell>{household.primaryContact}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            household.status === 'Active'
+                              ? 'default'
+                              : 'secondary'
+                          }
+                          className={
+                            household.status === 'Active'
+                              ? 'bg-green-100 text-green-800'
+                              : ''
+                          }
+                        >
+                          {household.status === "Active" 
+                            ? t("active") 
+                            : t("inactive")}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        <AlertDialog>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon">
                                 <MoreHorizontal className="h-4 w-4" />
-                                <span className="sr-only">More actions</span>
+                                <span className="sr-only">{t("more_actions")}</span>
                               </Button>
                             </DropdownMenuTrigger>
+
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem asChild>
                                 <Link href={`/households/${household.id}`}>
                                   <Eye className="mr-2 h-4 w-4" />
-                                  Visit Details
+                                  {t("view_details")}
                                 </Link>
                               </DropdownMenuItem>
+
                               <DropdownMenuItem asChild>
                                 <Link href={`/households/${household.id}/edit`}>
                                   <Pen className="mr-2 h-4 w-4" />
-                                  Edit
+                                  {t("edit")}
                                 </Link>
                               </DropdownMenuItem>
-                               <AlertDialogTrigger asChild>
+
+                              <AlertDialogTrigger asChild>
                                 <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10">
                                   <Trash2 className="mr-2 h-4 w-4" />
-                                  Delete
+                                  {t("delete")}
                                 </DropdownMenuItem>
                               </AlertDialogTrigger>
                             </DropdownMenuContent>
                           </DropdownMenu>
-                           <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This action cannot be undone. This will permanently delete the
-                                  <span className="font-semibold"> {household.familyName} </span> 
-                                  family and all associated data, including children and follow-up visits.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDelete(household.id, household.familyName)} className="bg-destructive hover:bg-destructive/90">
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
+
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                {t("delete_confirm_title")}
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                {t("delete_confirm_desc")} 
+                                <span className="font-semibold">
+                                  {" "}{household.familyName}{" "}
+                                </span>
+                                {t("delete_confirm_desc_2")}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() =>
+                                  handleDelete(household.id, household.familyName)
+                                }
+                                className="bg-destructive hover:bg-destructive/90"
+                              >
+                                {t("delete")}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
                         </AlertDialog>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                    </TableRow>
+                  ))}
               </TableBody>
             </Table>
           </CardContent>
