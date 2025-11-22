@@ -1,45 +1,53 @@
-rules_version = '2';service cloud.firestore {match /databases/{database}/documents {function isSignedIn() {
-  return request.auth != null;
-}
 
-// --- NEW RULE for Stats ---
-// Allow any signed-in user to READ the dashboard stats
-// but allow NO ONE (from the app) to write to it.
-match /stats/dashboard {
-  allow get: if isSignedIn();
-  allow list, write, delete: if false;
-}
+rules_version = '2';
 
-// --- Your Existing Rules ---
+service cloud.firestore {
+  match /databases/{database}/documents {
 
-// households/{householdId}
-match /households/{householdId} {
-  allow read, write: if isSignedIn();
-  
-  // Children subcollection
-  match /children/{childId} {
-    allow read, write: if isSignedIn();
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Checks if the user is the owner of the provided document.
+    // The `doc` parameter is the result of a get() call or the `resource` variable.
+    function isOwner(doc) {
+      return isSignedIn() && request.auth.uid == doc.data.ownerId;
+    }
+
+    // households/{householdId}
+    match /households/{householdId} {
+      // Any authenticated user can create a household, as long as they are the owner.
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      
+      // Any authenticated user (admin/field worker) can read all household data.
+      allow read: if isSignedIn();
+
+      // Only the original creator can update or delete their household document.
+      allow update, delete: if isOwner(resource);
+      
+      // Children subcollection
+      match /children/{childId} {
+        // Any authenticated user can manage child data.
+        allow read, write: if isSignedIn();
+      }
+      
+      // FollowUpVisits subcollection
+      match /followUpVisits/{visitId} {
+        // Any authenticated user can manage follow-up visits.
+        allow read, write: if isSignedIn();
+      }
+
+      // ChildProgressUpdates nested subcollection
+      match /children/{childId}/childProgressUpdates/{updateId} {
+        // Any authenticated user can manage progress updates.
+        allow read, write: if isSignedIn();
+      }
+    }
+
+    // This rule allows a user to perform a collection group query on 'children'
+    match /{path=**}/children/{childId} {
+      allow read: if isSignedIn();
+    }
   }
-  
-  // FollowUpVisits subcollection
-  match /followUpVisits/{visitId} {
-    allow read, write: if isSignedIn();
-  }
-
-  // ChildProgressUpdates nested subcollection
-  match /children/{childId}/childProgressUpdates/{updateId} {
-    allow read, write: if isSignedIn();
-  }
 }
-
-// Collection Group Queries
-match /{path=**}/children/{childId} {
-  allow read: if isSignedIn();
-}
-match /{path=**}/followUpVisits/{visitId} {
-  allow read: if isSignedIn();
-}
-match /{path=**}/childProgressUpdates/{updateId} {
-  allow read: if isSignedIn();
-}
-}}
