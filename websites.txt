@@ -1,0 +1,8 @@
+//Monitoring websites (login with authorized account for access under the project Community Compass
+
+API&SERVICES : https://console.cloud.google.com/google/maps-apis/api-list?project=studio-8235729385-f4cf4
+CREDENTIALS : https://console.cloud.google.com/apis/credentials?authuser=3&project=studio-8235729385-f4cf4
+CONSOLE1HRCYCLE : https://console.cloud.google.com/cloudscheduler?authuser=3&project=studio-8235729385-f4cf4
+FIREBASECONSOLE : https://console.firebase.google.com/u/3/project/studio-8235729385-f4cf4/settings/iam
+PERSISTENTDB : https://console.firebase.google.com/u/3/project/studio-8235729385-f4cf4/firestore/databases/-default-/data/~2Fhouseholds~2F5eel5Au25X0mCWDEt1MC
+
