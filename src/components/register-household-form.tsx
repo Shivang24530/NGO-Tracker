@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -12,7 +11,12 @@ import {
   doc,
   writeBatch,
 } from 'firebase/firestore';
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import {
+  getStorage,
+  ref as storageRef,
+  getDownloadURL,
+  uploadBytesResumable
+} from 'firebase/storage';
 import { useFirestore, useUser, useFirebaseApp } from '@/firebase';
 import { formatISO, addMonths, getYear, getQuarter } from 'date-fns';
 import { LocationPicker } from '@/components/map/location-picker';
@@ -35,12 +39,28 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
-import { MapPin, Trash2, PlusCircle, Loader2, Users, Home, Phone, ArrowRight, Upload, XCircle } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import {
+  MapPin,
+  Trash2,
+  PlusCircle,
+  Loader2,
+  Users,
+  Home,
+  Phone,
+  ArrowRight,
+  Upload,
+  XCircle
+} from 'lucide-react';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from './ui/card';
 import { cn } from '@/lib/utils';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import type { FollowUpVisit } from '@/lib/types';
-
 
 const childSchema = z.object({
   name: z.string().min(2, 'Name is too short'),
@@ -54,7 +74,6 @@ const childSchema = z.object({
 });
 
 const formSchema = z.object({
-  // Step 1
   familyName: z.string().min(3, 'Family name is required.'),
   fullAddress: z.string().min(10, 'Full address is required.'),
   locationArea: z.string().min(3, 'Location area is required.'),
@@ -64,8 +83,6 @@ const formSchema = z.object({
     .regex(/^[+]?[0-9]+$/, 'Contact number can only contain digits and an optional leading "+".'),
   latitude: z.number({ required_error: "Please set a location on the map." }),
   longitude: z.number({ required_error: "Please set a location on the map." }),
-
-  // Step 2
   children: z.array(childSchema),
 });
 
@@ -104,7 +121,6 @@ function Stepper({ currentStep }: { currentStep: number }) {
   );
 }
 
-
 export function RegisterHouseholdForm() {
   const router = useRouter();
   const firestore = useFirestore();
@@ -112,7 +128,7 @@ export function RegisterHouseholdForm() {
   const { user } = useUser();
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [initialCenter, setInitialCenter] = useState<{lat: number, lng: number} | null>(null);
+  const [initialCenter, setInitialCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
 
   const [familyPhotoFile, setFamilyPhotoFile] = useState<File | null>(null);
@@ -138,7 +154,7 @@ export function RegisterHouseholdForm() {
     control: form.control,
     name: 'children',
   });
-  
+
   const { watch, setValue } = form;
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -153,142 +169,144 @@ export function RegisterHouseholdForm() {
     let watchId: number;
 
     const fallbackToDefaultLocation = () => {
-        if (isMounted) {
-            setInitialCenter({ lat: 28.7041, lng: 77.1025 });
-        }
+      if (isMounted) {
+        setInitialCenter({ lat: 28.7041, lng: 77.1025 });
+      }
     };
 
     if (navigator.geolocation) {
-        watchId = navigator.geolocation.watchPosition(
-            (position) => {
-                if (isMounted) {
-                    const { latitude, longitude } = position.coords;
-                    if (!initialCenter) { // Set initial center only once
-                        setInitialCenter({ lat: latitude, lng: longitude });
-                    }
-                    setValue('latitude', latitude);
-                    setValue('longitude', longitude);
-                }
-            },
-            (error) => {
-                console.warn("Could not get user location, defaulting.", error);
-                fallbackToDefaultLocation();
-            },
-            {
-                enableHighAccuracy: true,
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          if (isMounted) {
+            const { latitude, longitude } = position.coords;
+            if (!initialCenter) {
+              setInitialCenter({ lat: latitude, lng: longitude });
             }
-        );
+            setValue('latitude', latitude);
+            setValue('longitude', longitude);
+          }
+        },
+        () => fallbackToDefaultLocation(),
+        { enableHighAccuracy: true }
+      );
     } else {
-        fallbackToDefaultLocation();
+      fallbackToDefaultLocation();
     }
 
     return () => {
-        isMounted = false;
-        if (watchId) {
-            navigator.geolocation.clearWatch(watchId);
-        }
+      isMounted = false;
+      if (watchId) navigator.geolocation.clearWatch(watchId);
     };
-}, [apiKey, setValue, initialCenter]);
-
+  }, [apiKey, setValue, initialCenter]);
 
   const handleNext = async () => {
     let isValid = true;
-    if (step === 1) {
-        isValid = await form.trigger(steps[0].fields);
-    } else if (step === 2) {
-        isValid = await form.trigger(steps[1].fields);
-    }
+    if (step === 1) isValid = await form.trigger(steps[0].fields);
+    else if (step === 2) isValid = await form.trigger(steps[1].fields);
 
-    if (isValid) {
-      if (step < steps.length) {
-        setStep((s) => s + 1);
-      } else {
-        await form.handleSubmit(onSubmit)();
-      }
-    } else {
-       toast({
+    if (!isValid) {
+      toast({
         variant: "destructive",
         title: "Incomplete Information",
         description: "Please fill out all required fields before proceeding.",
       });
+      return;
     }
+
+    if (step < steps.length) setStep(step + 1);
+    else await form.handleSubmit(onSubmit)();
   };
 
-  const handleBack = () => setStep((s) => s - 1);
-  
+  const handleBack = () => setStep(step - 1);
+
   const handleLocationChange = (lat: number, lng: number) => {
     setValue('latitude', lat, { shouldValidate: true });
     setValue('longitude', lng, { shouldValidate: true });
   };
-  
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, type: 'family' | 'house') => {
     const file = event.target.files?.[0];
-    if (file) {
-      const MAX_SIZE_MB = 1;
-      if (file.size > MAX_SIZE_MB * 1024 * 1024) {
-          toast({
-              variant: "destructive",
-              title: "Image Too Large",
-              description: `Please select an image smaller than ${MAX_SIZE_MB}MB.`,
-          });
-          event.target.value = '';
-          return;
-      }
-      
-      if (type === 'family') {
-          setFamilyPhotoFile(file);
-          setFamilyPhotoUrl(URL.createObjectURL(file));
-      } else {
-          setHousePhotoFile(file);
-          setHousePhotoUrl(URL.createObjectURL(file));
-      }
+    if (!file) return;
 
+    const MAX_SIZE_MB = 1;
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
       toast({
-        title: 'Photo Selected',
-        description: `Photo for ${type} is ready for upload.`,
+        variant: "destructive",
+        title: "Image Too Large",
+        description: `Please select an image smaller than ${MAX_SIZE_MB}MB.`,
       });
+      event.target.value = '';
+      return;
     }
+
+    if (type === 'family') {
+      setFamilyPhotoFile(file);
+      setFamilyPhotoUrl(URL.createObjectURL(file));
+    } else {
+      setHousePhotoFile(file);
+      setHousePhotoUrl(URL.createObjectURL(file));
+    }
+
+    toast({
+      title: 'Photo Selected',
+      description: `Photo for ${type} is ready for upload.`,
+    });
   };
 
   const cancelPhoto = (type: 'family' | 'house') => {
-    const inputRef = type === 'family' ? familyPhotoInputRef : housePhotoInputRef;
     if (type === 'family') {
-        setFamilyPhotoFile(null);
-        setFamilyPhotoUrl(null);
+      setFamilyPhotoFile(null);
+      setFamilyPhotoUrl(null);
+      if (familyPhotoInputRef.current) familyPhotoInputRef.current.value = '';
     } else {
-        setHousePhotoFile(null);
-        setHousePhotoUrl(null);
+      setHousePhotoFile(null);
+      setHousePhotoUrl(null);
+      if (housePhotoInputRef.current) housePhotoInputRef.current.value = '';
     }
+  };
 
-    if (inputRef.current) {
-        inputRef.current.value = '';
-    }
-  }
+  // ⭐ FIXED UPLOAD FUNCTION — stable, resumable, cancelable, never hangs
+  const uploadImage = async (
+    file: File,
+    path: string,
+    timeoutMs = 30000
+  ): Promise<string> => {
+    if (!firebaseApp) throw new Error("Firebase App is not initialized");
 
-  // Upload with a timeout and better error messages
-  const uploadImage = async (file: File, path: string, timeoutMs = 30000): Promise<string> => {
-    if (!firebaseApp) throw new Error('Firebase App is not initialized');
     const storage = getStorage(firebaseApp);
     const imageRef = storageRef(storage, path);
 
-    // Upload -> then getDownloadURL
-    const uploadAndGetUrl = async () => {
-      await uploadBytes(imageRef, file);
-      const downloadURL = await getDownloadURL(imageRef);
-      return downloadURL;
-    };
+    return new Promise((resolve, reject) => {
+      const uploadTask = uploadBytesResumable(imageRef, file);
 
-    // Race upload against a timeout so we never hang forever
-    return await Promise.race<string>([
-      uploadAndGetUrl(),
-      new Promise<string>((_, reject) =>
-        setTimeout(() => reject(new Error(`Upload timed out after ${timeoutMs}ms`)), timeoutMs)
-      ),
-    ]);
+      const timeout = setTimeout(() => {
+        uploadTask.cancel();
+        reject(new Error(`Upload timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      uploadTask.on(
+        "state_changed",
+        () => {},
+        (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        },
+        async () => {
+          clearTimeout(timeout);
+          try {
+            const url = await getDownloadURL(uploadTask.snapshot.ref);
+            resolve(url);
+          } catch (err) {
+            reject(err);
+          }
+        }
+      );
+    });
   };
 
   async function onSubmit(values: FormData) {
     setIsSubmitting(true);
+
     if (!user) {
       toast({
         variant: "destructive",
@@ -309,9 +327,6 @@ export function RegisterHouseholdForm() {
       return;
     }
 
-    // helpful debug logging
-    console.debug('[RegisterHousehold] submit started', { familyName: values.familyName });
-
     try {
       const batch = writeBatch(firestore);
       const householdRef = doc(collection(firestore, 'households'));
@@ -320,36 +335,30 @@ export function RegisterHouseholdForm() {
       let finalFamilyPhotoUrl = 'https://picsum.photos/seed/default-family/600/400';
       if (familyPhotoFile) {
         try {
-          console.debug('[RegisterHousehold] uploading family photo', { householdId });
           finalFamilyPhotoUrl = await uploadImage(familyPhotoFile, `households/${householdId}/familyPhoto.jpg`);
-          console.debug('[RegisterHousehold] family photo uploaded', { finalFamilyPhotoUrl });
         } catch (err) {
-          console.error('Family photo upload failed:', err);
           toast({
             variant: "destructive",
             title: "Family Photo Upload Failed",
             description: "Could not upload the family photo. Please try again.",
           });
           setIsSubmitting(false);
-          return; // stop submission so user can retry
+          return;
         }
       }
 
       let finalHousePhotoUrl = 'https://picsum.photos/seed/default-house/600/400';
       if (housePhotoFile) {
         try {
-          console.debug('[RegisterHousehold] uploading house photo', { householdId });
           finalHousePhotoUrl = await uploadImage(housePhotoFile, `households/${householdId}/housePhoto.jpg`);
-          console.debug('[RegisterHousehold] house photo uploaded', { finalHousePhotoUrl });
         } catch (err) {
-          console.error('House photo upload failed:', err);
           toast({
             variant: "destructive",
             title: "House Photo Upload Failed",
             description: "Could not upload the house photo. Please try again.",
           });
           setIsSubmitting(false);
-          return; // stop submission so user can retry
+          return;
         }
       }
 
@@ -389,10 +398,8 @@ export function RegisterHouseholdForm() {
         });
       });
 
-      // Determine which quarters to schedule visits for.
-      // Use the household createdAt as the start quarter so we don't create past-dated visits.
-      const createdDate = new Date(); // we set createdAt to now below
-      const createdQuarter = getQuarter(createdDate); // 1..4
+      const createdDate = new Date();
+      const createdQuarter = getQuarter(createdDate);
       const visitsColRef = collection(householdRef, 'followUpVisits');
       const year = getYear(createdDate);
 
@@ -412,16 +419,12 @@ export function RegisterHouseholdForm() {
       }
 
       try {
-        console.debug('[RegisterHousehold] committing batch', { householdId });
-        // add a safety timeout for the commit as well in case network stalls
         const commitPromise = batch.commit();
-        const commitResult = await Promise.race([
+        await Promise.race([
           commitPromise,
           new Promise((_, reject) => setTimeout(() => reject(new Error('Commit timed out')), 20000)),
         ]);
-        console.debug('[RegisterHousehold] batch committed', { householdId, commitResult });
       } catch (err) {
-        console.error('Batch commit failed:', err);
         toast({
           variant: "destructive",
           title: "Registration Failed",
@@ -436,14 +439,12 @@ export function RegisterHouseholdForm() {
         description: `The ${values.familyName} has been added to the system.`,
       });
 
-      // navigate away
       router.push('/dashboard');
     } catch (error) {
-      console.error("Error registering family (outer):", error);
       toast({
         variant: "destructive",
         title: "Registration Failed",
-        description: "An error occurred while saving the data. Please try again.",
+        description: "An error occurred while saving the data.",
       });
     } finally {
       setIsSubmitting(false);
@@ -455,194 +456,291 @@ export function RegisterHouseholdForm() {
       case 1:
         return (
           <div className="space-y-6">
-            <FormField name="familyName" control={form.control} render={({ field }) => <FormItem><FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-primary" />Family Name *</FormLabel><FormControl><Input placeholder="e.g., Kumar Family" {...field} /></FormControl><FormMessage /></FormItem>} />
-            <FormField name="fullAddress" control={form.control} render={({ field }) => <FormItem><FormLabel className="flex items-center"><Home className="mr-2 h-4 w-4 text-primary" />Full Address *</FormLabel><FormControl><Input placeholder="Complete address with landmarks" {...field} /></FormControl><FormMessage /></FormItem>} />
-            <FormField name="locationArea" control={form.control} render={({ field }) => <FormItem><FormLabel className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-primary" />Location/Area *</FormLabel><FormControl><Input placeholder="e.g., Sector 15, Dharavi" {...field} /></FormControl><FormMessage /></FormItem>} />
+            <FormField name="familyName" control={form.control} render={({ field }) => (
+              <FormItem>
+                <FormLabel className="flex items-center">
+                  <Users className="mr-2 h-4 w-4 text-primary" />Family Name *
+                </FormLabel>
+                <FormControl><Input placeholder="e.g., Kumar Family" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField name="fullAddress" control={form.control} render={({ field }) => (
+              <FormItem>
+                <FormLabel className="flex items-center">
+                  <Home className="mr-2 h-4 w-4 text-primary" />Full Address *
+                </FormLabel>
+                <FormControl><Input placeholder="Complete address with landmarks" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField name="locationArea" control={form.control} render={({ field }) => (
+              <FormItem>
+                <FormLabel className="flex items-center">
+                  <MapPin className="mr-2 h-4 w-4 text-primary" />Location/Area *
+                </FormLabel>
+                <FormControl><Input placeholder="e.g., Sector 15, Dharavi" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
             <FormField
               control={control}
               name="latitude"
               render={() => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><MapPin className="mr-2 h-4 w-4 text-primary" />GPS Location *</FormLabel>
-                    <FormDescription>Drag the pin to the exact house location on the map.</FormDescription>
-                    <FormControl>
-                        <div className="h-[400px] w-full rounded-lg overflow-hidden border">
-                           {apiKey && initialCenter ? (
-                            <LocationPicker 
-                                apiKey={apiKey} 
-                                initialCenter={initialCenter} 
-                                onLocationChange={handleLocationChange}
-                                currentLocation={{lat: watch('latitude')!, lng: watch('longitude')!}}
-                            />
-                            ) : (
-                            <div className="h-full w-full flex items-center justify-center bg-muted text-muted-foreground">
-                                {mapError ? <span className='text-destructive p-4'>{mapError}</span> : <Loader2 className="h-8 w-8 animate-spin" />}
-                            </div>
-                            )}
+                <FormItem>
+                  <FormLabel className="flex items-center">
+                    <MapPin className="mr-2 h-4 w-4 text-primary" />GPS Location *
+                  </FormLabel>
+                  <FormDescription>Drag the pin to the house location.</FormDescription>
+                  <FormControl>
+                    <div className="h-[400px] w-full rounded-lg overflow-hidden border">
+                      {apiKey && initialCenter ? (
+                        <LocationPicker
+                          apiKey={apiKey}
+                          initialCenter={initialCenter}
+                          onLocationChange={handleLocationChange}
+                          currentLocation={{ lat: watch('latitude')!, lng: watch('longitude')! }}
+                        />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center bg-muted text-muted-foreground">
+                          {mapError ? <span className='text-destructive p-4'>{mapError}</span> : <Loader2 className="h-8 w-8 animate-spin" />}
                         </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+                      )}
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
             />
-            <FormField name="primaryContact" control={form.control} render={({ field }) => <FormItem><FormLabel className="flex items-center"><Phone className="mr-2 h-4 w-4 text-primary" />Primary Contact Number *</FormLabel><FormControl><Input placeholder="10-digit mobile number" {...field} /></FormControl><FormMessage /></FormItem>} />
+
+            <FormField name="primaryContact" control={form.control} render={({ field }) => (
+              <FormItem>
+                <FormLabel className="flex items-center">
+                  <Phone className="mr-2 h-4 w-4 text-primary" />Primary Contact *
+                </FormLabel>
+                <FormControl><Input placeholder="10-digit number" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
           </div>
         );
+
       case 2:
         return (
           <div className="space-y-6">
             {fields.map((field, index) => (
               <div key={field.id} className="border p-4 rounded-lg space-y-4 relative bg-secondary/30">
-                 <div className="grid md:grid-cols-3 gap-4">
-                    <FormField control={form.control} name={`children.${index}.name`} render={({ field }) => <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
-                    <FormField control={form.control} name={`children.${index}.dateOfBirth`} render={({ field }) => <FormItem><FormLabel>Date of Birth</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>} />
-                    <FormField control={form.control} name={`children.${index}.gender`} render={({ field }) => <FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select><FormMessage /></FormItem>} />
-                 </div>
-                 <FormField
-                  control={form.control}
-                  name={`children.${index}.studyingStatus`}
-                  render={({ field }) => (
-                    <FormItem className="space-y-3">
-                      <FormLabel>Child Status</FormLabel>
-                      <FormControl>
-                        <RadioGroup
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                          className="flex flex-col space-y-1"
-                        >
-                          <FormItem className="flex items-center space-x-3 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value="Studying" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              Studying
-                            </FormLabel>
-                          </FormItem>
-                          <FormItem className="flex items-center space-x-3 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value="Not Studying" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              Not Studying
-                            </FormLabel>
-                          </FormItem>
-                          <FormItem className="flex items-center space-x-3 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value="Migrated" />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              Migrated
-                            </FormLabel>
-                          </FormItem>
-                        </RadioGroup>
-                      </FormControl>
+                <div className="grid md:grid-cols-3 gap-4">
+                  <FormField control={form.control} name={`children.${index}.name`} render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
-                  )}
-                />
-                 {watch(`children.${index}.studyingStatus`) === 'Studying' && (
-                     <div className="grid md:grid-cols-2 gap-4">
-                         <FormField control={form.control} name={`children.${index}.currentClass`} render={({ field }) => <FormItem><FormLabel>Current Class</FormLabel><FormControl><Input placeholder="e.g., 2nd Class" {...field} /></FormControl><FormMessage /></FormItem>} />
-                         <FormField control={form.control} name={`children.${index}.schoolName`} render={({ field }) => <FormItem><FormLabel>School Name</FormLabel><FormControl><Input placeholder="e.g., Local Public School" {...field} /></FormControl><FormMessage /></FormItem>} />
-                     </div>
-                 )}
-                 <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => remove(index)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  )} />
+
+                  <FormField control={form.control} name={`children.${index}.dateOfBirth`} render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date of Birth</FormLabel>
+                      <FormControl><Input type="date" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+
+                  <FormField control={form.control} name={`children.${index}.gender`} render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Gender</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          <SelectItem value="Male">Male</SelectItem>
+                          <SelectItem value="Female">Female</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                </div>
+
+                <FormField control={form.control} name={`children.${index}.studyingStatus`} render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel>Child Status</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        className="flex flex-col space-y-1"
+                      >
+                        <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormControl><RadioGroupItem value="Studying" /></FormControl>
+                          <FormLabel className="font-normal">Studying</FormLabel>
+                        </FormItem>
+                        <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormControl><RadioGroupItem value="Not Studying" /></FormControl>
+                          <FormLabel className="font-normal">Not Studying</FormLabel>
+                        </FormItem>
+                        <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormControl><RadioGroupItem value="Migrated" /></FormControl>
+                          <FormLabel className="font-normal">Migrated</FormLabel>
+                        </FormItem>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+
+                {watch(`children.${index}.studyingStatus`) === 'Studying' && (
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <FormField control={form.control} name={`children.${index}.currentClass`} render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Current Class</FormLabel>
+                        <FormControl><Input placeholder="e.g., 3rd" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+
+                    <FormField control={form.control} name={`children.${index}.schoolName`} render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>School Name</FormLabel>
+                        <FormControl><Input placeholder="e.g., Public School" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                  </div>
+                )}
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute top-2 right-2"
+                  onClick={() => remove(index)}
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
               </div>
             ))}
-            <Button type="button" variant="outline" onClick={() => append({ name: '', dateOfBirth: '', gender: 'Male', studyingStatus: 'Not Studying', currentClass: '', schoolName: '' })}><PlusCircle className="mr-2 h-4 w-4" />Add Child</Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                append({
+                  name: '',
+                  dateOfBirth: '',
+                  gender: 'Male',
+                  studyingStatus: 'Not Studying',
+                  currentClass: '',
+                  schoolName: ''
+                })
+              }
+            >
+              <PlusCircle className="mr-2 h-4 w-4" />Add Child
+            </Button>
           </div>
         );
+
       case 3:
         return (
-            <>
+          <>
             <input type="file" accept="image/*" ref={familyPhotoInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'family')} />
             <input type="file" accept="image/*" ref={housePhotoInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'house')} />
+
             <div className="grid md:grid-cols-2 gap-8">
+              {/* FAMILY PHOTO */}
               <div className="space-y-4">
                 <FormLabel>Family Photo</FormLabel>
-                <div className="border-dashed border-2 rounded-lg aspect-video flex items-center justify-center text-muted-foreground bg-secondary/30 overflow-hidden">
-                  {familyPhotoUrl ? <Image src={familyPhotoUrl} alt="Family" width={600} height={400} className="w-full h-full object-cover" data-ai-hint="family portrait"/> : <span>No photo</span>}
+                <div className="border-dashed border-2 rounded-lg aspect-video flex items-center justify-center bg-secondary/30 overflow-hidden">
+                  {familyPhotoUrl ? (
+                    <Image src={familyPhotoUrl} alt="Family" width={600} height={400} className="w-full h-full object-cover" />
+                  ) : <span>No photo</span>}
                 </div>
                 <div className="flex justify-center gap-2">
-                    <Button type="button" variant="outline" className="w-full" onClick={() => familyPhotoInputRef.current?.click()}>
-                        <Upload className="mr-2 h-4 w-4" /> Upload Photo
+                  <Button type="button" variant="outline" className="w-full" onClick={() => familyPhotoInputRef.current?.click()}>
+                    <Upload className="mr-2 h-4 w-4" /> Upload
+                  </Button>
+                  {familyPhotoUrl && (
+                    <Button type="button" variant="destructive" onClick={() => cancelPhoto('family')}>
+                      <XCircle className="mr-2 h-4 w-4" /> Cancel
                     </Button>
-                    {familyPhotoUrl && (
-                        <Button type="button" variant="destructive" onClick={() => cancelPhoto('family')}>
-                            <XCircle className="mr-2 h-4 w-4" /> Cancel
-                        </Button>
-                    )}
+                  )}
                 </div>
               </div>
+
+              {/* HOUSE PHOTO */}
               <div className="space-y-4">
                 <FormLabel>House Photo</FormLabel>
-                <div className="border-dashed border-2 rounded-lg aspect-video flex items-center justify-center text-muted-foreground bg-secondary/30 overflow-hidden">
-                    {housePhotoUrl ? <Image src={housePhotoUrl} alt="House" width={600} height={400} className="w-full h-full object-cover" data-ai-hint="modest house" /> : <span>No photo</span>}
+                <div className="border-dashed border-2 rounded-lg aspect-video flex items-center justify-center bg-secondary/30 overflow-hidden">
+                  {housePhotoUrl ? (
+                    <Image src={housePhotoUrl} alt="House" width={600} height={400} className="w-full h-full object-cover" />
+                  ) : <span>No photo</span>}
                 </div>
                 <div className="flex justify-center gap-2">
-                    <Button type="button" variant="outline" className="w-full" onClick={() => housePhotoInputRef.current?.click()}>
-                        <Upload className="mr-2 h-4 w-4" /> Upload Photo
+                  <Button type="button" variant="outline" className="w-full" onClick={() => housePhotoInputRef.current?.click()}>
+                    <Upload className="mr-2 h-4 w-4" /> Upload
+                  </Button>
+                  {housePhotoUrl && (
+                    <Button type="button" variant="destructive" onClick={() => cancelPhoto('house')}>
+                      <XCircle className="mr-2 h-4 w-4" /> Cancel
                     </Button>
-                    {housePhotoUrl && (
-                         <Button type="button" variant="destructive" onClick={() => cancelPhoto('house')}>
-                            <XCircle className="mr-2 h-4 w-4" /> Cancel
-                        </Button>
-                    )}
+                  )}
                 </div>
               </div>
             </div>
-            </>
+          </>
         );
+
       default:
         return null;
     }
-  }
+  };
 
   const stepTitles = ["Household Information", "Children Details", "Photos"];
   const stepDescriptions = [
-      "Enter the basic details of the family and set their location.", 
-      "Add details for each child in the household.", 
-      "Optionally, add photos of the family and their house."
-    ];
+    "Enter the basic details of the family and set their location.",
+    "Add details for each child in the household.",
+    "Optionally, add photos of the family and their house."
+  ];
   const nextButtonLabels = ["Next: Add Children", "Next: Add Photos", "Complete Registration"];
 
   return (
     <Form {...form}>
-       <Stepper currentStep={step} />
-        <Card className="w-full">
-            <CardHeader>
-                <div className="flex items-center gap-2">
-                    <Home className="h-6 w-6 text-primary"/>
-                    <CardTitle className="font-headline text-xl">{stepTitles[step-1]}</CardTitle>
-                </div>
-                <CardDescription>{stepDescriptions[step-1]}</CardDescription>
-            </CardHeader>
-            <CardContent>
-                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                    {renderStepContent()}
+      <Stepper currentStep={step} />
+      <Card className="w-full">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Home className="h-6 w-6 text-primary" />
+            <CardTitle className="font-headline text-xl">{stepTitles[step - 1]}</CardTitle>
+          </div>
+          <CardDescription>{stepDescriptions[step - 1]}</CardDescription>
+        </CardHeader>
 
-                    <div className="flex justify-between mt-12">
-                        {step > 1 ? (
-                            <Button type="button" variant="secondary" onClick={handleBack}>Back</Button>
-                        ) : <div></div>}
-                        
-                        <Button type="button" onClick={handleNext} disabled={isSubmitting}>
-                            {isSubmitting && step === steps.length ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+        <CardContent>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+            {renderStepContent()}
+            <div className="flex justify-between mt-12">
+              {step > 1 ? (
+                <Button type="button" variant="secondary" onClick={handleBack}>Back</Button>
+              ) : <div></div>}
 
-                            {step < steps.length ? (
-                                <>
-                                {nextButtonLabels[step - 1]} <ArrowRight className="ml-2 h-4 w-4" />
-                                </>
-                            ) : (
-                                isSubmitting ? 'Submitting...' : nextButtonLabels[step - 1]
-                            )}
-                        </Button>
-                    </div>
-                </form>
-            </CardContent>
-        </Card>
+              <Button type="button" onClick={handleNext} disabled={isSubmitting}>
+                {isSubmitting && step === steps.length ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {step < steps.length ? (
+                  <>
+                    {nextButtonLabels[step - 1]} <ArrowRight className="ml-2 h-4 w-4" />
+                  </>
+                ) : (
+                  isSubmitting ? 'Submitting...' : nextButtonLabels[step - 1]
+                )}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </Form>
   );
 }
-
-    
