@@ -1,0 +1,310 @@
+{
+  "entities": {
+    "Household": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Household",
+      "type": "object",
+      "description": "Represents a family or household in the community.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Household entity."
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "The UID of the user who owns this household record."
+        },
+        "familyName": {
+          "type": "string",
+          "description": "Name of the family."
+        },
+        "fullAddress": {
+          "type": "string",
+          "description": "Full address of the household."
+        },
+        "locationArea": {
+          "type": "string",
+          "description": "The general location area of the household."
+        },
+        "primaryContact": {
+          "type": "string",
+          "description": "Name of the primary contact person in the household."
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the household (e.g., Active, Migrated)."
+        },
+        "nextFollowupDue": {
+          "type": "string",
+          "description": "Date when the next follow-up visit is due.",
+          "format": "date-time"
+        },
+        "latitude": {
+          "type": "number",
+          "description": "Latitude coordinate of the household's location."
+        },
+        "longitude": {
+          "type": "number",
+          "description": "Longitude coordinate of the household's location."
+        },
+        "gpsAccuracyMeters": {
+          "type": "number",
+          "description": "GPS accuracy in meters."
+        },
+        "familyPhotoUrl": {
+          "type": "string",
+          "description": "URL of the family photo stored in Firebase Storage.",
+          "format": "uri"
+        },
+        "housePhotoUrl": {
+          "type": "string",
+          "description": "URL of the house photo stored in Firebase Storage.",
+          "format": "uri"
+        },
+        "toiletAvailable": {
+          "type": "boolean",
+          "description": "Indicates if a toilet is available in the household."
+        },
+        "waterSupply": {
+          "type": "string",
+          "description": "Type of water supply available to the household."
+        },
+        "electricity": {
+          "type": "boolean",
+          "description": "Indicates if the household has electricity."
+        },
+        "annualIncome": {
+          "type": "number",
+          "description": "Annual income of the household."
+        }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "familyName",
+        "fullAddress"
+      ]
+    },
+    "Child": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Child",
+      "type": "object",
+      "description": "Represents a child beneficiary linked to a household.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Child entity."
+        },
+        "householdId": {
+          "type": "string",
+          "description": "Reference to Household. (Relationship: Household 1:N Child)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the child."
+        },
+        "age": {
+          "type": "number",
+          "description": "Age of the child."
+        },
+        "gender": {
+          "type": "string",
+          "description": "Gender of the child."
+        },
+        "isStudying": {
+          "type": "boolean",
+          "description": "Indicates if the child is currently studying."
+        },
+        "currentClass": {
+          "type": "string",
+          "description": "The child's current class or grade."
+        },
+        "schoolName": {
+          "type": "string",
+          "description": "Name of the school the child attends."
+        }
+      },
+      "required": [
+        "id",
+        "householdId",
+        "name",
+        "age"
+      ]
+    },
+    "FollowUpVisit": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "FollowUpVisit",
+      "type": "object",
+      "description": "Represents a follow-up visit made to a household by a field worker.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the FollowUpVisit entity."
+        },
+        "householdId": {
+          "type": "string",
+          "description": "Reference to Household. (Relationship: Household 1:N FollowUpVisit)"
+        },
+        "visitDate": {
+          "type": "string",
+          "description": "Date of the follow-up visit.",
+          "format": "date-time"
+        },
+        "visitType": {
+          "type": "string",
+          "description": "Type of visit (e.g., Quarterly, Annual)."
+        },
+        "visitedBy": {
+          "type": "string",
+          "description": "Name of the field worker who conducted the visit."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Notes from the field worker regarding the visit."
+        }
+      },
+      "required": [
+        "id",
+        "householdId",
+        "visitDate",
+        "visitType"
+      ]
+    },
+    "ChildProgressUpdate": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ChildProgressUpdate",
+      "type": "object",
+      "description": "Represents a snapshot of a child's progress during a specific visit.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the ChildProgressUpdate entity."
+        },
+        "childId": {
+          "type": "string",
+          "description": "Reference to Child. (Relationship: Child 1:N ChildProgressUpdate)"
+        },
+        "visitId": {
+          "type": "string",
+          "description": "Reference to FollowUpVisit. (Relationship: FollowUpVisit 1:N ChildProgressUpdate)"
+        },
+        "isStudying": {
+          "type": "boolean",
+          "description": "Indicates if the child is currently studying."
+        },
+        "notStudyingReason": {
+          "type": "string",
+          "description": "Reason why the child is not studying (if applicable)."
+        },
+        "isWorking": {
+          "type": "boolean",
+          "description": "Indicates if the child is currently working."
+        },
+        "workDetails": {
+          "type": "string",
+          "description": "Details about the child's work (if applicable)."
+        },
+        "studyingChallenges": {
+          "type": "string",
+          "description": "Challenges the child is facing with their studies (if applicable)."
+        }
+      },
+      "required": [
+        "id",
+        "childId",
+        "visitId"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/households/{householdId}",
+        "definition": {
+          "entityName": "Household",
+          "schema": {
+            "$ref": "#/backend/entities/Household"
+          },
+          "description": "Stores household data. Includes denormalized 'members' map for authorization independence (if collaborative access is needed).",
+          "params": [
+            {
+              "name": "householdId",
+              "description": "Unique identifier for the household."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/households/{householdId}/children/{childId}",
+        "definition": {
+          "entityName": "Child",
+          "schema": {
+            "$ref": "#/backend/entities/Child"
+          },
+          "description": "Stores child data associated with a specific household.  HouseholdId is denormalized from parent Household. This ensures Authorization Independence and QAPs for listing children.",
+          "params": [
+            {
+              "name": "householdId",
+              "description": "Unique identifier for the parent household."
+            },
+            {
+              "name": "childId",
+              "description": "Unique identifier for the child."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/households/{householdId}/followUpVisits/{followUpVisitId}",
+        "definition": {
+          "entityName": "FollowUpVisit",
+          "schema": {
+            "$ref": "#/backend/entities/FollowUpVisit"
+          },
+          "description": "Stores follow-up visit data for a household. HouseholdId is denormalized from parent Household.  This ensures Authorization Independence and QAPs for listing followUpVisits.",
+          "params": [
+            {
+              "name": "householdId",
+              "description": "Unique identifier for the parent household."
+            },
+            {
+              "name": "followUpVisitId",
+              "description": "Unique identifier for the follow-up visit."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/households/{householdId}/children/{childId}/childProgressUpdates/{childProgressUpdateId}",
+        "definition": {
+          "entityName": "ChildProgressUpdate",
+          "schema": {
+            "$ref": "#/backend/entities/ChildProgressUpdate"
+          },
+          "description": "Stores child progress updates associated with a specific child and follow-up visit. ChildId is denormalized from parent Child, and HouseholdId (transitively).  This ensures Authorization Independence and QAPs for listing childProgressUpdates.",
+          "params": [
+            {
+              "name": "householdId",
+              "description": "Unique identifier for the parent household."
+            },
+            {
+              "name": "childId",
+              "description": "Unique identifier for the child."
+            },
+            {
+              "name": "childProgressUpdateId",
+              "description": "Unique identifier for the child progress update."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to support the NGO Community Tracker application, focusing on secure, scalable, and easily maintainable data access patterns. The structure is optimized for the core features: user authentication, household registration, child data entry, photo capture, progress monitoring, automated follow-up scheduling, data visualization, and reporting.\n\n**Authorization Independence:** Authorization is enforced via path-based ownership and membership maps, avoiding complex `get()` calls in security rules. This is achieved through denormalization. For example, the `Households` collection might include a `members` map if collaborative access is needed. The `Child` and `FollowUpVisit` collections are nested under `Households`, with access controlled based on the household's ownership, where `Households` `id` is used as foreign key in `Child` and `FollowUpVisit` collections.\n\n**Structural Segregation:** Data is segregated into collections based on entity type to maintain a homogeneous security posture. Each collection has a clear and distinct purpose, simplifying security rules and access patterns.\n\n**Access Modeling:**\n*   Private Data: User-owned data is stored under the `/users/{userId}` path, while shared or global data is stored in top-level collections.\n*   Collaborative Data: Membership maps (`members: {uid1: \"role\", uid2: \"role\"}`) are used to manage access to collaborative entities like shared households, if the need arises.\n*   Hierarchical Paths for User-Owned Data: For entities that represent a `User 1:N Entity` relationship (e.g., a `User` has many `Threads`), prefer path-based ownership like `/users/{userId}/threads/{threadId}`. This structure is highly secure and makes ownership-based security rules simple and efficient.\n\n**QAPs (Rules are not Filters):** The structure supports secure `list` operations by segregating data based on access requirements. Path-based ownership and membership maps ensure that only authorized users can access specific documents. This design also facilitates atomic operations (transactions/batches) due to the avoidance of hierarchical authorization dependencies.\n\n**Invariants:** The structure supports the integrity of ownership, timestamps, and denormalized data through explicit state modeling and predictable schema. Strict naming conventions and standardized authorization fields enhance data clarity and predictability, ensuring consistent access control across the application."
+  }
+}
