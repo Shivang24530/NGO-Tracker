@@ -19,6 +19,7 @@ import { useEffect, useState } from 'react';
 import { useUser } from '@/firebase';
 import { Loader2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,6 +27,7 @@ export default function LoginPage() {
   const { user, isUserLoading } = useUser();
 
   const { t } = useLanguage();
+  const { toast } = useToast();
 
   const [email, setEmail] = useState('priya@example.com');
   const [password, setPassword] = useState('password');
@@ -36,9 +38,26 @@ export default function LoginPage() {
     }
   }, [user, router]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    initiateEmailSignIn(auth, email, password);
+    try {
+      await initiateEmailSignIn(auth, email, password);
+    } catch (error: any) {
+      console.error("Login error:", error);
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        toast({
+          variant: "destructive",
+          title: "Login Failed",
+          description: "Invalid username or password. Please try again.",
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Login Failed",
+          description: "An error occurred. Please try again later.",
+        });
+      }
+    }
   };
 
   if (isUserLoading || user) {
@@ -66,14 +85,14 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
-            
+
             <div className="space-y-2">
               <Label htmlFor="email" className="font-headline">
                 {t("email")}
               </Label>
               <Input
                 id="email"
-                type="email"
+                type="text"
                 placeholder={t("email_placeholder")}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -85,12 +104,12 @@ export default function LoginPage() {
               <Label htmlFor="password" className="font-headline">
                 {t("password")}
               </Label>
-              <Input 
-                id="password" 
-                type="password" 
+              <Input
+                id="password"
+                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                required 
+                required
               />
             </div>
 

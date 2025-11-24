@@ -70,17 +70,19 @@ function QuarterlyReportContent() {
       }
 
       const completedVisits = quarter.visits.filter(v => v.status === 'Completed');
-      if(completedVisits.length === 0){
-         toast({ title: 'No completed surveys to report.'});
-         setIsDownloading(false);
-         return;
+      if (completedVisits.length === 0) {
+        toast({ title: 'No completed surveys to report.' });
+        setIsDownloading(false);
+        return;
       }
 
       let rows: string[][] = [];
       const headers = [
         'Family Name', 'Location', 'Child Name', 'Age', 'Gender',
-        'Studying?', 'Reason Not Studying', 'Working?', 'Work Details',
-        'Study Challenges', 'Visit Date', 'Visited By',
+        'Studying?', 'Current Class', 'School Name', 'Reason Not Studying',
+        'Working?', 'Work Details', 'Study Challenges',
+        'Toilet Available?', 'Water Supply', 'Electricity?', 'Annual Income (INR)',
+        'Visit Date', 'Visited By', 'Visit Notes',
       ];
 
       for (const visit of completedVisits) {
@@ -89,11 +91,14 @@ function QuarterlyReportContent() {
 
         const householdChildren = children.filter(c => c.householdId === household.id);
 
+        // For annual survey data (same for all children in the household)
+        const isAnnualVisit = visit.visitType === 'Annual';
+
         for (const child of householdChildren) {
           const progressUpdatesRef = collection(firestore, `households/${household.id}/children/${child.id}/childProgressUpdates`);
           const q = query(progressUpdatesRef, where('visitId', '==', visit.id));
           const querySnapshot = await getDocs(q);
-          
+
           if (!querySnapshot.empty) {
             const progress = querySnapshot.docs[0].data() as ChildProgressUpdate;
             const age = calculateAge(child.dateOfBirth);
@@ -104,22 +109,30 @@ function QuarterlyReportContent() {
               age.toString(),
               child.gender,
               progress?.is_studying ? 'Yes' : 'No',
+              progress?.is_studying ? (child.currentClass || '') : '',
+              progress?.is_studying ? (child.schoolName || '') : '',
               progress?.is_studying ? '' : progress?.not_studying_reason || '',
               progress?.is_working ? 'Yes' : 'No',
               progress?.is_working ? progress?.work_details || '' : '',
               progress?.studying_challenges || '',
+              // Annual survey data (only for annual visits)
+              isAnnualVisit ? (household.toiletAvailable ? 'Yes' : 'No') : 'N/A',
+              isAnnualVisit ? (household.waterSupply || '') : 'N/A',
+              isAnnualVisit ? (household.electricity ? 'Yes' : 'No') : 'N/A',
+              isAnnualVisit ? (household.annualIncome?.toString() || '0') : 'N/A',
               format(new Date(visit.visitDate), 'yyyy-MM-dd'),
               visit.visitedBy,
+              visit.notes || '',
             ].map(value => `"${String(value ?? '').replace(/"/g, '""')}"`);
             rows.push(row);
           }
         }
       }
-      
+
       if (rows.length === 0) {
-          toast({ title: 'No data to report.'});
-          setIsDownloading(false);
-          return;
+        toast({ title: 'No data to report.' });
+        setIsDownloading(false);
+        return;
       }
 
       const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
@@ -131,7 +144,7 @@ function QuarterlyReportContent() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-  
+
       toast({ title: 'Report Downloaded' });
     } catch (error) {
       console.error('Failed to generate report:', error);
@@ -183,7 +196,7 @@ function QuarterlyReportContent() {
           {quarters.map((quarter) => {
             const completionPercentage = quarter.total === 0 ? 0 : (quarter.completed / quarter.total) * 100;
             const isPastQuarter = year < currentYear || (year === currentYear && quarter.id < currentQuarterNum);
-            
+
             return (
               <AccordionItem
                 value={`item-${quarter.id}`}
@@ -302,8 +315,20 @@ function QuarterlyReportContent() {
                                   </TableCell>
                                   <TableCell className="text-right">
                                     {visitStatus === 'Completed' ? (
-                                      <div className="flex items-center justify-end text-green-600">
-                                        <CheckCircle2 className="h-5 w-5 ml-auto" />
+                                      <div className="flex items-center justify-end gap-2">
+                                        <div className="flex items-center text-green-600">
+                                          <CheckCircle2 className="h-5 w-5" />
+                                        </div>
+                                        {!isPastQuarter && (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => router.push(`/households/${household.id}/follow-ups/${visit.id}/conduct`)}
+                                          >
+                                            <PenSquare className="mr-2 h-4 w-4" />
+                                            Edit
+                                          </Button>
+                                        )}
                                       </div>
                                     ) : isActionable && visit ? (
                                       <Button

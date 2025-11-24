@@ -18,22 +18,17 @@ import { Button } from '../ui/button';
 import { useAuth, useUser } from '@/firebase';
 
 export function UserNav() {
-  const userImage = placeholderImages.placeholderImages.find(
-    (p) => p.id === 'user-avatar-priya'
-  );
   const { state } = useSidebar();
   const { user } = useUser();
   const auth = useAuth();
 
-
   const userContent = (
     <>
       <Avatar className="h-8 w-8">
-        <AvatarImage src={user?.photoURL || userImage?.imageUrl} alt={user?.displayName || "User"} />
-        <AvatarFallback>{user?.displayName?.charAt(0) || 'U'}</AvatarFallback>
+        <AvatarFallback>P</AvatarFallback>
       </Avatar>
       <div className="text-left group-data-[collapsible=icon]:hidden">
-        <p className="text-sm font-medium leading-none text-sidebar-foreground">{user?.displayName || 'Field Worker'}</p>
+        <p className="text-sm font-medium leading-none text-sidebar-foreground">PACE</p>
         <p className="text-xs leading-none text-muted-foreground">
           {user?.email || ''}
         </p>
@@ -57,27 +52,25 @@ export function UserNav() {
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user?.displayName || 'Priya Sharma'}</p>
+            <p className="text-sm font-medium leading-none">PACE</p>
             <p className="text-xs leading-none text-muted-foreground">
-              {user?.email || 'priya@example.com'}
+              {user?.email || ''}
             </p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem>
-            <User className="mr-2 h-4 w-4" />
-            <span>Profile</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem>
-            <Settings className="mr-2 h-4 w-4" />
-            <span>Settings</span>
+          <DropdownMenuItem asChild>
+            <Link href="/change-credentials" className="cursor-pointer">
+              <Settings className="mr-2 h-4 w-4" />
+              <span>Change Credentials</span>
+            </Link>
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => auth.signOut()}>
-            <LogOut className="mr-2 h-4 w-4" />
-            <span>Log out</span>
+          <LogOut className="mr-2 h-4 w-4" />
+          <span>Log out</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

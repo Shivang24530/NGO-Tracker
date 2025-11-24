@@ -4,11 +4,12 @@ import { PageHeader } from '@/components/common/page-header';
 import { Button } from '@/components/ui/button';
 import { ConductVisitForm } from '@/components/conduct-visit-form';
 import { useDoc, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import type { FollowUpVisit, Household, Child } from '@/lib/types';
-import { doc, collection } from 'firebase/firestore';
+import type { FollowUpVisit, Household, Child, ChildProgressUpdate } from '@/lib/types';
+import { doc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useEffect, useState } from 'react';
 
 export default function ConductVisitPage() {
   const { t } = useLanguage();
@@ -44,7 +45,44 @@ export default function ConductVisitPage() {
   const { data: householdChildren, isLoading: childrenLoading } =
     useCollection<Child>(childrenRef);
 
-  const isLoading = visitLoading || householdLoading || childrenLoading;
+  const [existingUpdates, setExistingUpdates] = useState<ChildProgressUpdate[]>([]);
+  const [updatesLoading, setUpdatesLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUpdates = async () => {
+      if (!firestore || !householdChildren || !visitId || !householdId) {
+        setUpdatesLoading(false);
+        return;
+      }
+
+      try {
+        const updates: ChildProgressUpdate[] = [];
+
+        for (const child of householdChildren) {
+          const updatesRef = collection(firestore, `households/${householdId}/children/${child.id}/childProgressUpdates`);
+          const q = query(updatesRef, where('visitId', '==', visitId));
+          const snapshot = await getDocs(q);
+
+          snapshot.forEach(doc => {
+            const data = doc.data() as ChildProgressUpdate;
+            updates.push({ id: doc.id, ...data });
+          });
+        }
+
+        setExistingUpdates(updates);
+      } catch (error) {
+        console.error("Error fetching existing updates:", error);
+      } finally {
+        setUpdatesLoading(false);
+      }
+    };
+
+    if (!childrenLoading) {
+      fetchUpdates();
+    }
+  }, [firestore, householdChildren, visitId, householdId, childrenLoading]);
+
+  const isLoading = visitLoading || householdLoading || childrenLoading || updatesLoading;
 
   // -------------------- LOADING --------------------
   if (isLoading) {
@@ -88,6 +126,8 @@ export default function ConductVisitPage() {
           visit={visit}
           household={household}
           children={householdChildren || []}
+          existingUpdates={existingUpdates}
+          householdChildren={householdChildren || []}
         />
       </main>
     </div>

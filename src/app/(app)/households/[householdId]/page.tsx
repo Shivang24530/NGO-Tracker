@@ -32,6 +32,7 @@ import {
   School
 } from 'lucide-react';
 import { useLanguage } from "@/contexts/LanguageContext";
+import { calculateAge } from '@/lib/utils';
 
 export default function HouseholdDetailsPage() {
   const { t } = useLanguage();
@@ -85,7 +86,7 @@ export default function HouseholdDetailsPage() {
       <PageHeader title={household.familyName} />
 
       <main className="flex-1 space-y-8 p-4 md:p-8">
-        
+
         {/* //////////////////////////////////////////
                    HOUSEHOLD INFORMATION
         ////////////////////////////////////////// */}
@@ -145,26 +146,44 @@ export default function HouseholdDetailsPage() {
                 <p className="text-sm font-medium text-muted-foreground">
                   {t("family_photo")}
                 </p>
-                <Image
-                  src={household.familyPhotoUrl}
-                  alt="Family Photo"
-                  width={400}
-                  height={300}
-                  className="rounded-lg border aspect-video object-cover"
-                />
+                {household.familyPhotoUrl ? (
+                  <Image
+                    src={household.familyPhotoUrl}
+                    alt="Family Photo"
+                    width={400}
+                    height={300}
+                    className="rounded-lg border aspect-video object-cover"
+                  />
+                ) : (
+                  <div className="rounded-lg border aspect-video bg-muted flex items-center justify-center text-muted-foreground">
+                    <div className="text-center">
+                      <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No family photo</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
                 <p className="text-sm font-medium text-muted-foreground">
                   {t("house_photo")}
                 </p>
-                <Image
-                  src={household.housePhotoUrl}
-                  alt="House Photo"
-                  width={400}
-                  height={300}
-                  className="rounded-lg border aspect-video object-cover"
-                />
+                {household.housePhotoUrl ? (
+                  <Image
+                    src={household.housePhotoUrl}
+                    alt="House Photo"
+                    width={400}
+                    height={300}
+                    className="rounded-lg border aspect-video object-cover"
+                  />
+                ) : (
+                  <div className="rounded-lg border aspect-video bg-muted flex items-center justify-center text-muted-foreground">
+                    <div className="text-center">
+                      <Home className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No house photo</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -200,7 +219,7 @@ export default function HouseholdDetailsPage() {
                 {children?.map(child => (
                   <TableRow key={child.id}>
                     <TableCell>{child.name}</TableCell>
-                    <TableCell>{child.age}</TableCell>
+                    <TableCell>{calculateAge(child.dateOfBirth)}</TableCell>
                     <TableCell>{child.gender}</TableCell>
                     <TableCell>
                       <Badge
