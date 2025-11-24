@@ -149,7 +149,7 @@ export default function AllHouseholdsPage() {
             placeholder={t("search_family")}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full border rounded-md p-2"
+            className="w-full border border-input bg-background text-foreground rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
 

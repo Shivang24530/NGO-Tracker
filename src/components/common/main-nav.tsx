@@ -46,13 +46,13 @@ export function MainNav() {
     <>
       <SidebarHeader>
         <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="bg-white rounded-md p-1.5 flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-800 rounded-md p-1.5 flex items-center justify-center">
             <Heart className="w-5 h-5 text-primary" />
           </div>
 
           {/* HEADER - DO NOT TRANSLATE */}
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-            <h1 className="text-lg font-bold font-headline text-background">
+            <h1 className="text-lg font-bold font-headline text-sidebar-foreground">
               NGO Tracker
             </h1>
             <p className="text-xs text-sidebar-foreground/80">
