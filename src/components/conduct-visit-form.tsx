@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -11,6 +11,8 @@ import { useFirestore, useUser } from '@/firebase';
 import { collection, doc, writeBatch } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
+import { OfflineWarning } from '@/components/offline-warning';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import {
     Form,
@@ -71,6 +73,7 @@ export function ConductVisitForm({ visit, household, children, existingUpdates =
     const router = useRouter();
     const firestore = useFirestore();
     const { user } = useUser();
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -157,12 +160,14 @@ export function ConductVisitForm({ visit, household, children, existingUpdates =
     }, [existingUpdates, children, visit, user, form]);
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
+        setIsSubmitting(true);
         if (!user) {
             toast({
                 variant: "destructive",
                 title: "Not Authenticated",
                 description: "You must be logged in to complete a visit.",
             });
+            setIsSubmitting(false);
             return;
         }
 
@@ -222,7 +227,7 @@ export function ConductVisitForm({ visit, household, children, existingUpdates =
                 description: `Survey for ${household.familyName} has been successfully submitted.`,
             });
             router.push('/follow-ups');
-            router.refresh(); // To ensure the reports page gets fresh data
+            // router.refresh(); // Removed to prevent offline hanging
         } catch (error) {
             console.error("Error completing visit:", error);
             toast({
@@ -230,6 +235,8 @@ export function ConductVisitForm({ visit, household, children, existingUpdates =
                 title: "Submission Failed",
                 description: "An error occurred while saving the visit data.",
             });
+        } finally {
+            setIsSubmitting(false);
         }
     }
 
@@ -451,8 +458,12 @@ export function ConductVisitForm({ visit, household, children, existingUpdates =
                 </Card>
                 <div className="flex justify-end gap-2">
                     <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
-                    <Button type="submit" size="lg" className="font-headline">Complete Visit</Button>
+                    <Button type="submit" size="lg" className="font-headline" disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {isSubmitting ? 'Submitting...' : 'Complete Visit'}
+                    </Button>
                 </div>
+                <OfflineWarning className="mt-4" />
             </form>
         </Form>
     );

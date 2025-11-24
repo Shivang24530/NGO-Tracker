@@ -8,6 +8,7 @@ import { MainNav } from '@/components/common/main-nav';
 import { useUser } from '@/firebase/auth/use-user';
 import { redirect } from 'next/navigation';
 import { AuthGuard } from '@/components/auth/auth-guard';
+import { GlobalOfflineBanner } from '@/components/global-offline-banner';
 
 export const metadata: Metadata = {
   title: 'Community Compass Dashboard',
@@ -21,7 +22,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Sidebar collapsible="icon" variant="sidebar" side="left">
           <MainNav />
         </Sidebar>
-        <SidebarInset className='bg-background'>{children}</SidebarInset>
+        <SidebarInset className='bg-background'>
+          <GlobalOfflineBanner />
+          {children}
+        </SidebarInset>
       </SidebarProvider>
     </AuthGuard>
   );

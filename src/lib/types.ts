@@ -9,8 +9,9 @@ export type Household = {
   status: 'Active' | 'Migrated' | 'Inactive';
   createdAt: string; // ISO date string
   nextFollowupDue: string; // ISO date string
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
+  locationUntracked?: boolean;
   gpsAccuracyMeters?: number;
   familyPhotoUrl: string;
   housePhotoUrl: string;

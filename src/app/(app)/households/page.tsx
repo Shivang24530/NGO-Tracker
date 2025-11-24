@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { PageHeader } from '@/components/common/page-header';
 import {
   Table,
@@ -78,9 +79,12 @@ export default function AllHouseholdsPage() {
 
   const finalIsLoading = isUserLoading || isLoading;
 
-  const handleDelete = async (householdId: string, familyName: string) => {
-    if (!firestore) return;
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const handleDelete = async (householdId: string, familyName: string) => {
+    if (!firestore || deletingId) return;
+
+    setDeletingId(householdId);
     const householdDocRef = doc(firestore, 'households', householdId);
 
     try {
@@ -100,7 +104,7 @@ export default function AllHouseholdsPage() {
         title: t("family_deleted"),
         description: `${familyName} ${t("family_deleted_desc")}`,
       });
-      router.refresh();
+      // router.refresh(); // Removed to prevent offline hanging. useCollection updates automatically.
 
     } catch (error) {
       console.error('Error deleting household:', error);
@@ -116,6 +120,8 @@ export default function AllHouseholdsPage() {
         title: t("deletion_failed"),
         description: t("deletion_failed_desc"),
       });
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -242,8 +248,9 @@ export default function AllHouseholdsPage() {
                                   handleDelete(household.id, household.familyName)
                                 }
                                 className="bg-destructive hover:bg-destructive/90"
+                                disabled={deletingId === household.id}
                               >
-                                {t("delete")}
+                                {deletingId === household.id ? "Deleting..." : t("delete")}
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
