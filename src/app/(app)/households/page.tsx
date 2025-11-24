@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { PageHeader } from '@/components/common/page-header';
 import {
   Table,
@@ -79,7 +79,19 @@ export default function AllHouseholdsPage() {
 
   const finalIsLoading = isUserLoading || isLoading;
 
+  const [searchTerm, setSearchTerm] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // ⭐ SUPER EFFICIENT CLIENT-SIDE FILTERING (0 Firestore reads)
+  const filteredHouseholds = useMemo(() => {
+    if (!households) return [];
+    if (!searchTerm.trim()) return households;
+
+    const term = searchTerm.toLowerCase();
+    return households.filter(item =>
+      item.familyName.toLowerCase().includes(term)
+    );
+  }, [households, searchTerm]);
 
   const handleDelete = async (householdId: string, familyName: string) => {
     if (!firestore || deletingId) return;
@@ -129,6 +141,18 @@ export default function AllHouseholdsPage() {
     <div className="flex min-h-screen w-full flex-col">
       <PageHeader title={t("all_families")} />
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+
+        {/* 🔍 SEARCH BAR */}
+        <div className="max-w-sm">
+          <input
+            type="text"
+            placeholder={t("search_family")}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full border rounded-md p-2"
+          />
+        </div>
+
         <Card>
           <CardHeader>
             <CardTitle>{t("family_directory")}</CardTitle>
@@ -158,7 +182,7 @@ export default function AllHouseholdsPage() {
                   </TableRow>
                 )}
 
-                {!finalIsLoading && households && households.length === 0 && (
+                {!finalIsLoading && filteredHouseholds.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center">
                       {t("no_families")}
@@ -166,98 +190,97 @@ export default function AllHouseholdsPage() {
                   </TableRow>
                 )}
 
-                {households &&
-                  households.map((household) => (
-                    <TableRow key={household.id}>
-                      <TableCell className="font-medium">
-                        {household.familyName}
-                      </TableCell>
-                      <TableCell>{household.locationArea}</TableCell>
-                      <TableCell>{household.primaryContact}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            household.status === 'Active'
-                              ? 'default'
-                              : 'secondary'
-                          }
-                          className={
-                            household.status === 'Active'
-                              ? 'bg-green-100 text-green-800'
-                              : ''
-                          }
-                        >
-                          {household.status === "Active"
-                            ? t("active")
-                            : t("inactive")}
-                        </Badge>
-                      </TableCell>
+                {filteredHouseholds.map((household) => (
+                  <TableRow key={household.id}>
+                    <TableCell className="font-medium">
+                      {household.familyName}
+                    </TableCell>
+                    <TableCell>{household.locationArea}</TableCell>
+                    <TableCell>{household.primaryContact}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          household.status === 'Active'
+                            ? 'default'
+                            : 'secondary'
+                        }
+                        className={
+                          household.status === 'Active'
+                            ? 'bg-green-100 text-green-800'
+                            : ''
+                        }
+                      >
+                        {household.status === "Active"
+                          ? t("active")
+                          : t("inactive")}
+                      </Badge>
+                    </TableCell>
 
-                      <TableCell className="text-right">
-                        <AlertDialog>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreHorizontal className="h-4 w-4" />
-                                <span className="sr-only">{t("more_actions")}</span>
-                              </Button>
-                            </DropdownMenuTrigger>
+                    <TableCell className="text-right">
+                      <AlertDialog>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4" />
+                              <span className="sr-only">{t("more_actions")}</span>
+                            </Button>
+                          </DropdownMenuTrigger>
 
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem asChild>
-                                <Link href={`/households/${household.id}`}>
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  {t("view_details")}
-                                </Link>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/households/${household.id}`}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                {t("view_details")}
+                              </Link>
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem asChild>
+                              <Link href={`/households/${household.id}/edit`}>
+                                <Pen className="mr-2 h-4 w-4" />
+                                {t("edit")}
+                              </Link>
+                            </DropdownMenuItem>
+
+                            <AlertDialogTrigger asChild>
+                              <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                {t("delete")}
                               </DropdownMenuItem>
+                            </AlertDialogTrigger>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
 
-                              <DropdownMenuItem asChild>
-                                <Link href={`/households/${household.id}/edit`}>
-                                  <Pen className="mr-2 h-4 w-4" />
-                                  {t("edit")}
-                                </Link>
-                              </DropdownMenuItem>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              {t("delete_confirm_title")}
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              {t("delete_confirm_desc")}
+                              <span className="font-semibold">
+                                {" "}{household.familyName}{" "}
+                              </span>
+                              {t("delete_confirm_desc_2")}
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
 
-                              <AlertDialogTrigger asChild>
-                                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  {t("delete")}
-                                </DropdownMenuItem>
-                              </AlertDialogTrigger>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                {t("delete_confirm_title")}
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                {t("delete_confirm_desc")}
-                                <span className="font-semibold">
-                                  {" "}{household.familyName}{" "}
-                                </span>
-                                {t("delete_confirm_desc_2")}
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() =>
-                                  handleDelete(household.id, household.familyName)
-                                }
-                                className="bg-destructive hover:bg-destructive/90"
-                                disabled={deletingId === household.id}
-                              >
-                                {deletingId === household.id ? "Deleting..." : t("delete")}
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() =>
+                                handleDelete(household.id, household.familyName)
+                              }
+                              className="bg-destructive hover:bg-destructive/90"
+                              disabled={deletingId === household.id}
+                            >
+                              {deletingId === household.id ? "Deleting..." : t("delete")}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </CardContent>
