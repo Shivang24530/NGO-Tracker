@@ -3,7 +3,7 @@
 import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 let firebaseApp: FirebaseApp;
@@ -24,26 +24,17 @@ if (!getApps().length) {
 }
 
 const auth = getAuth(firebaseApp);
-const firestore = getFirestore(firebaseApp);
-const storage = getStorage(firebaseApp);
 
-// Enable offline persistence for Firestore
+// Initialize Firestore with modern offline persistence
 // This allows the app to work 100% offline - field workers can register families
 // and conduct visits without internet, and data will automatically sync when online
-if (typeof window !== 'undefined') {
-  enableIndexedDbPersistence(firestore)
-    .catch((err) => {
-      if (err.code === 'failed-precondition') {
-        // Multiple tabs open, persistence can only be enabled in one tab at a time
-        console.warn('Firestore offline persistence failed: Multiple tabs open');
-      } else if (err.code === 'unimplemented') {
-        // The current browser doesn't support persistence
-        console.warn('Firestore offline persistence failed: Browser not supported');
-      } else {
-        console.warn('Firestore offline persistence failed:', err.code);
-      }
-    });
-}
+const firestore = initializeFirestore(firebaseApp, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
+});
+
+const storage = getStorage(firebaseApp);
 
 export { firebaseApp, auth, firestore, storage };
 
