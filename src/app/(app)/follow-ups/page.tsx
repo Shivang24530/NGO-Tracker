@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '@/components/common/page-header';
 import {
@@ -16,6 +17,7 @@ import {
   Users,
   TrendingUp,
   Loader2,
+  Search
 } from 'lucide-react';
 import { useFollowUpLogic } from '@/hooks/use-follow-up-logic';
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -52,6 +54,21 @@ export default function FollowUpsPage() {
 
   const now = new Date();
 
+  // ⭐ ADD SEARCH STATE
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // ⭐ CLIENT-SIDE OPTIMIZED FILTER (0 database reads)
+  const filteredHouseholds = useMemo(() => {
+    if (!households) return [];
+    if (!searchTerm.trim()) return households;
+
+    const term = searchTerm.toLowerCase();
+    return households.filter(h =>
+      h.familyName.toLowerCase().includes(term) ||
+      h.locationArea.toLowerCase().includes(term)
+    );
+  }, [households, searchTerm]);
+
   const overdue =
     visits?.filter(
       (v) =>
@@ -72,8 +89,6 @@ export default function FollowUpsPage() {
           new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime()
       )
       .slice(0, 5) ?? [];
-
-  const totalFamilies = households?.length ?? 0;
 
   const getHouseholdName = (householdId: string) =>
     households?.find((h) => h.id === householdId)?.familyName || t("unknown_family");
@@ -96,32 +111,50 @@ export default function FollowUpsPage() {
           </div>
         ) : (
           <>
+            {/* ⭐ SEARCH BAR (Dark Mode Optimized) */}
+            <div className="max-w-sm">
+              <div className="flex items-center gap-2 border border-input bg-background rounded-md px-2">
+                <Search className="h-4 w-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder={t("search_family")}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-background text-foreground p-2 focus:outline-none"
+                />
+              </div>
+            </div>
+
             {/* Stats */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+
               <StatCard
                 title={t("overdue_visits")}
-                value={overdue.length}
+                value={overdue.filter(v => filteredHouseholds.some(h => h.id === v.householdId)).length}
                 icon={AlertCircle}
                 color="red"
                 isLoading={isLoading}
               />
+
               <StatCard
                 title={t("upcoming_visits")}
-                value={upcoming.length}
+                value={upcoming.filter(v => filteredHouseholds.some(h => h.id === v.householdId)).length}
                 icon={Clock}
                 color="orange"
                 isLoading={isLoading}
               />
+
               <StatCard
                 title={t("visits_completed")}
-                value={completed.length}
+                value={completed.filter(v => filteredHouseholds.some(h => h.id === v.householdId)).length}
                 icon={CalendarCheck}
                 color="green"
                 isLoading={isLoading}
               />
+
               <StatCard
                 title={t("total_families")}
-                value={totalFamilies}
+                value={filteredHouseholds.length}
                 icon={Users}
                 color="blue"
                 isLoading={isLoading}
@@ -139,9 +172,11 @@ export default function FollowUpsPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {overdue.length > 0 ? (
+                  {overdue.filter(v => filteredHouseholds.some(h => h.id === v.householdId)).length > 0 ? (
                     <div className="space-y-4">
-                      {overdue.map((visit) => (
+                      {overdue
+                        .filter(v => filteredHouseholds.some(h => h.id === v.householdId))
+                        .map((visit) => (
                         <Link
                           href={`/households/${visit.householdId}/follow-ups/${visit.id}/conduct`}
                           key={visit.id}
@@ -180,9 +215,11 @@ export default function FollowUpsPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {upcoming.length > 0 ? (
+                  {upcoming.filter(v => filteredHouseholds.some(h => h.id === v.householdId)).length > 0 ? (
                     <div className="space-y-4">
-                      {upcoming.map((visit) => (
+                      {upcoming
+                        .filter(v => filteredHouseholds.some(h => h.id === v.householdId))
+                        .map((visit) => (
                         <Link
                           href={`/households/${visit.householdId}/follow-ups/${visit.id}/conduct`}
                           key={visit.id}
@@ -221,9 +258,11 @@ export default function FollowUpsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {recentVisits && recentVisits.length > 0 ? (
+                {recentVisits.filter(v => filteredHouseholds.some(h => h.id === v.householdId)).length > 0 ? (
                   <div className="space-y-2">
-                    {recentVisits.map((visit) => (
+                    {recentVisits
+                      .filter(v => filteredHouseholds.some(h => h.id === v.householdId))
+                      .map((visit) => (
                       <div key={visit.id} className="border p-4 rounded-lg">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
