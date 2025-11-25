@@ -3,7 +3,7 @@
 import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 let firebaseApp: FirebaseApp;
@@ -24,7 +24,16 @@ if (!getApps().length) {
 }
 
 const auth = getAuth(firebaseApp);
-const firestore = getFirestore(firebaseApp);
+
+// Initialize Firestore with modern offline persistence
+// This allows the app to work 100% offline - field workers can register families
+// and conduct visits without internet, and data will automatically sync when online
+const firestore = initializeFirestore(firebaseApp, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
+});
+
 const storage = getStorage(firebaseApp);
 
 export { firebaseApp, auth, firestore, storage };

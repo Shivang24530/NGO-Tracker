@@ -2,6 +2,7 @@
 
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { LanguageToggle } from '@/components/language-toggle';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 interface PageHeaderProps {
   title: string;
@@ -22,7 +23,11 @@ export function PageHeader({ title, children }: PageHeaderProps) {
       </div>
 
       {/* Language toggle button */}
-      <LanguageToggle />
+      {/* Theme and Language toggles */}
+      <div className="flex items-center gap-2">
+        <ThemeToggle />
+        <LanguageToggle />
+      </div>
     </header>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import { PageHeader } from '@/components/common/page-header';
 import {
   Table,
@@ -57,7 +58,6 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useState, useMemo } from 'react';
 
 export default function AllHouseholdsPage() {
   const { t } = useLanguage();
@@ -65,8 +65,6 @@ export default function AllHouseholdsPage() {
   const firestore = useFirestore();
   const { user, isUserLoading } = useUser();
   const router = useRouter();
-
-  const [searchTerm, setSearchTerm] = useState("");
 
   const householdsQuery = useMemoFirebase(
     () =>
@@ -81,6 +79,9 @@ export default function AllHouseholdsPage() {
 
   const finalIsLoading = isUserLoading || isLoading;
 
+  const [searchTerm, setSearchTerm] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   // ⭐ SUPER EFFICIENT CLIENT-SIDE FILTERING (0 Firestore reads)
   const filteredHouseholds = useMemo(() => {
     if (!households) return [];
@@ -92,52 +93,53 @@ export default function AllHouseholdsPage() {
     );
   }, [households, searchTerm]);
 
-
   const handleDelete = async (householdId: string, familyName: string) => {
-    if (!firestore) return;
+    if (!firestore || deletingId) return;
 
+    setDeletingId(householdId);
     const householdDocRef = doc(firestore, 'households', householdId);
 
-    const batch = writeBatch(firestore);
+    try {
+      const batch = writeBatch(firestore);
 
-    const childrenSnapshot = await getDocs(collection(householdDocRef, 'children'));
-    childrenSnapshot.forEach((doc) => batch.delete(doc.ref));
+      const childrenSnapshot = await getDocs(collection(householdDocRef, 'children'));
+      childrenSnapshot.forEach((doc) => batch.delete(doc.ref));
 
-    const visitsSnapshot = await getDocs(collection(householdDocRef, 'followUpVisits'));
-    visitsSnapshot.forEach((doc) => batch.delete(doc.ref));
+      const visitsSnapshot = await getDocs(collection(householdDocRef, 'followUpVisits'));
+      visitsSnapshot.forEach((doc) => batch.delete(doc.ref));
 
-    batch.delete(householdDocRef);
+      batch.delete(householdDocRef);
 
-    batch
-      .commit()
-      .then(() => {
-        toast({
-          title: t("family_deleted"),
-          description: `${familyName} ${t("family_deleted_desc")}`,
-        });
-        router.refresh();
-      })
-      .catch((error) => {
-        console.error('Error deleting household:', error);
+      await batch.commit();
 
-        const permissionError = new FirestorePermissionError({
-          path: householdDocRef.path,
-          operation: 'delete',
-        });
-        errorEmitter.emit('permission-error', permissionError);
-
-        toast({
-          variant: 'destructive',
-          title: t("deletion_failed"),
-          description: t("deletion_failed_desc"),
-        });
+      toast({
+        title: t("family_deleted"),
+        description: `${familyName} ${t("family_deleted_desc")}`,
       });
+      // router.refresh(); // Removed to prevent offline hanging. useCollection updates automatically.
+
+    } catch (error) {
+      console.error('Error deleting household:', error);
+
+      const permissionError = new FirestorePermissionError({
+        path: householdDocRef.path,
+        operation: 'delete',
+      });
+      errorEmitter.emit('permission-error', permissionError);
+
+      toast({
+        variant: 'destructive',
+        title: t("deletion_failed"),
+        description: t("deletion_failed_desc"),
+      });
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
     <div className="flex min-h-screen w-full flex-col">
       <PageHeader title={t("all_families")} />
-
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
 
         {/* 🔍 SEARCH BAR */}
@@ -147,7 +149,7 @@ export default function AllHouseholdsPage() {
             placeholder={t("search_family")}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full border rounded-md p-2"
+            className="w-full border border-input bg-background text-foreground rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
 
@@ -208,8 +210,8 @@ export default function AllHouseholdsPage() {
                             : ''
                         }
                       >
-                        {household.status === "Active" 
-                          ? t("active") 
+                        {household.status === "Active"
+                          ? t("active")
                           : t("inactive")}
                       </Badge>
                     </TableCell>
@@ -254,10 +256,10 @@ export default function AllHouseholdsPage() {
                               {t("delete_confirm_title")}
                             </AlertDialogTitle>
                             <AlertDialogDescription>
-                              {t("delete_confirm_desc")}{" "}
+                              {t("delete_confirm_desc")}
                               <span className="font-semibold">
-                                {household.familyName}
-                              </span>{" "}
+                                {" "}{household.familyName}{" "}
+                              </span>
                               {t("delete_confirm_desc_2")}
                             </AlertDialogDescription>
                           </AlertDialogHeader>
@@ -269,12 +271,12 @@ export default function AllHouseholdsPage() {
                                 handleDelete(household.id, household.familyName)
                               }
                               className="bg-destructive hover:bg-destructive/90"
+                              disabled={deletingId === household.id}
                             >
-                              {t("delete")}
+                              {deletingId === household.id ? "Deleting..." : t("delete")}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
-
                       </AlertDialog>
                     </TableCell>
                   </TableRow>
@@ -287,3 +289,4 @@ export default function AllHouseholdsPage() {
     </div>
   );
 }
+

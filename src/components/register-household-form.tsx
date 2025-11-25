@@ -21,6 +21,7 @@ import { useFirestore, useUser, useFirebaseApp } from '@/firebase';
 import { formatISO, addMonths, getYear, getQuarter } from 'date-fns';
 import { LocationPicker } from '@/components/map/location-picker';
 import { Button } from '@/components/ui/button';
+import { OfflineWarning } from '@/components/offline-warning';
 import {
   Form,
   FormControl,
@@ -81,9 +82,13 @@ const formSchema = z.object({
     .string()
     .min(10, 'A valid contact number is required.')
     .regex(/^[+]?[0-9]+$/, 'Contact number can only contain digits and an optional leading "+".'),
-  latitude: z.number({ required_error: "Please set a location on the map." }),
-  longitude: z.number({ required_error: "Please set a location on the map." }),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  locationUntracked: z.boolean().default(false),
   children: z.array(childSchema),
+}).refine((data) => data.locationUntracked || (data.latitude && data.longitude), {
+  message: "Please select a location on the map or mark as untracked.",
+  path: ["latitude"], // Attach error to latitude field
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -130,6 +135,7 @@ export function RegisterHouseholdForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialCenter, setInitialCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [isLocationUntracked, setIsLocationUntracked] = useState(false);
 
   const [familyPhotoFile, setFamilyPhotoFile] = useState<File | null>(null);
   const [housePhotoFile, setHousePhotoFile] = useState<File | null>(null);
@@ -146,11 +152,12 @@ export function RegisterHouseholdForm() {
       fullAddress: '',
       locationArea: '',
       primaryContact: '',
+      locationUntracked: false,
       children: [],
     },
   });
 
-  const { fields, append, remove, control } = useFieldArray({
+  const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: 'children',
   });
@@ -286,7 +293,7 @@ export function RegisterHouseholdForm() {
 
       uploadTask.on(
         "state_changed",
-        () => {},
+        () => { },
         (error) => {
           clearTimeout(timeout);
           reject(error);
@@ -310,8 +317,8 @@ export function RegisterHouseholdForm() {
     if (!user) {
       toast({
         variant: "destructive",
-        title: "Authentication Error",
-        description: "You must be logged in to register a family.",
+        title: "System Error",
+        description: "Authentication or database service is not available.",
       });
       setIsSubmitting(false);
       return;
@@ -328,40 +335,60 @@ export function RegisterHouseholdForm() {
     }
 
     try {
-      const batch = writeBatch(firestore);
       const householdRef = doc(collection(firestore, 'households'));
       const householdId = householdRef.id;
+      let finalFamilyPhotoUrl: string | null = null;
+      let finalHousePhotoUrl: string | null = null;
 
-      let finalFamilyPhotoUrl = 'https://picsum.photos/seed/default-family/600/400';
+      const uploadPromises: Promise<void>[] = [];
+
       if (familyPhotoFile) {
-        try {
-          finalFamilyPhotoUrl = await uploadImage(familyPhotoFile, `households/${householdId}/familyPhoto.jpg`);
-        } catch (err) {
+        if (navigator.onLine) {
+          try {
+            finalFamilyPhotoUrl = await uploadImage(familyPhotoFile, `households/${householdId}/familyPhoto.jpg`);
+          } catch (err) {
+            console.error("Family photo upload failed:", err);
+            toast({
+              variant: "destructive",
+              title: "Photo Upload Failed",
+              description: "Could not upload family photo. Registration will proceed without it.",
+            });
+            // Proceed without photo
+          }
+        } else {
           toast({
-            variant: "destructive",
-            title: "Family Photo Upload Failed",
-            description: "Could not upload the family photo. Please try again.",
+            title: "Offline Mode",
+            description: "Skipping family photo upload. You can add it later.",
           });
-          setIsSubmitting(false);
-          return;
         }
       }
 
-      let finalHousePhotoUrl = 'https://picsum.photos/seed/default-house/600/400';
       if (housePhotoFile) {
-        try {
-          finalHousePhotoUrl = await uploadImage(housePhotoFile, `households/${householdId}/housePhoto.jpg`);
-        } catch (err) {
+        if (navigator.onLine) {
+          try {
+            finalHousePhotoUrl = await uploadImage(housePhotoFile, `households/${householdId}/housePhoto.jpg`);
+          } catch (err) {
+            console.error("House photo upload failed:", err);
+            toast({
+              variant: "destructive",
+              title: "Photo Upload Failed",
+              description: "Could not upload house photo. Registration will proceed without it.",
+            });
+            // Proceed without photo
+          }
+        } else {
           toast({
-            variant: "destructive",
-            title: "House Photo Upload Failed",
-            description: "Could not upload the house photo. Please try again.",
+            title: "Offline Mode",
+            description: "Skipping house photo upload. You can add it later.",
           });
-          setIsSubmitting(false);
-          return;
         }
       }
 
+      if (uploadPromises.length > 0) {
+        await Promise.all(uploadPromises);
+      }
+
+      const batch = writeBatch(firestore);
       const newHouseholdData = {
         id: householdId,
         ownerId: user.uid,
@@ -372,8 +399,9 @@ export function RegisterHouseholdForm() {
         status: 'Active' as const,
         createdAt: formatISO(new Date()),
         nextFollowupDue: formatISO(addMonths(new Date(), 3)),
-        latitude: values.latitude,
-        longitude: values.longitude,
+        latitude: values.locationUntracked ? null : (values.latitude ?? null),
+        longitude: values.locationUntracked ? null : (values.longitude ?? null),
+        locationUntracked: values.locationUntracked || false,
         familyPhotoUrl: finalFamilyPhotoUrl,
         housePhotoUrl: finalHousePhotoUrl,
         toiletAvailable: false,
@@ -381,7 +409,6 @@ export function RegisterHouseholdForm() {
         electricity: false,
         annualIncome: 0,
       };
-
       batch.set(householdRef, newHouseholdData);
 
       (values.children || []).forEach(child => {
@@ -406,16 +433,15 @@ export function RegisterHouseholdForm() {
       for (let qNum = createdQuarter; qNum <= 4; qNum++) {
         const quarterDate = new Date(year, (qNum - 1) * 3 + 1, 15);
         const newVisitRef = doc(visitsColRef);
-        const newVisitData: Omit<FollowUpVisit, 'childProgressUpdates'> = {
+        batch.set(newVisitRef, {
           id: newVisitRef.id,
           householdId: householdRef.id,
           visitDate: formatISO(quarterDate),
           visitType: qNum === 4 ? 'Annual' : 'Quarterly',
-          status: 'Pending',
+          status: 'Pending' as const,
           visitedBy: '',
           notes: '',
-        };
-        batch.set(newVisitRef, newVisitData);
+        });
       }
 
       try {
@@ -430,16 +456,17 @@ export function RegisterHouseholdForm() {
           title: "Registration Failed",
           description: "Could not save household data. Please try again.",
         });
-        setIsSubmitting(false);
-        return;
       }
+
+
 
       toast({
         title: 'Registration Complete!',
-        description: `The ${values.familyName} has been added to the system.`,
+        description: `The ${values.familyName} family has been added.`,
       });
-
       router.push('/dashboard');
+      // router.refresh(); // Removed to prevent offline hanging
+
     } catch (error) {
       toast({
         variant: "destructive",
@@ -487,30 +514,73 @@ export function RegisterHouseholdForm() {
             )} />
 
             <FormField
-              control={control}
+              control={form.control}
               name="latitude"
               render={() => (
                 <FormItem>
                   <FormLabel className="flex items-center">
-                    <MapPin className="mr-2 h-4 w-4 text-primary" />GPS Location *
+                    <MapPin className="mr-2 h-4 w-4 text-primary" />GPS Location {!isLocationUntracked && '*'}
                   </FormLabel>
-                  <FormDescription>Drag the pin to the house location.</FormDescription>
+                  <FormDescription>
+                    {isLocationUntracked
+                      ? 'Location marked as untracked. You can add it later when editing.'
+                      : 'Drag the pin to the house location, or mark as untracked for offline registration.'}
+                  </FormDescription>
                   <FormControl>
-                    <div className="h-[400px] w-full rounded-lg overflow-hidden border">
-                      {apiKey && initialCenter ? (
-                        <LocationPicker
-                          apiKey={apiKey}
-                          initialCenter={initialCenter}
-                          onLocationChange={handleLocationChange}
-                          currentLocation={{ lat: watch('latitude')!, lng: watch('longitude')! }}
-                        />
-                      ) : (
-                        <div className="h-full w-full flex items-center justify-center bg-muted text-muted-foreground">
-                          {mapError ? <span className='text-destructive p-4'>{mapError}</span> : <Loader2 className="h-8 w-8 animate-spin" />}
+                    {!isLocationUntracked ? (
+                      <div className="h-[400px] w-full rounded-lg overflow-hidden border">
+                        {apiKey && initialCenter ? (
+                          <LocationPicker
+                            apiKey={apiKey}
+                            initialCenter={initialCenter}
+                            onLocationChange={handleLocationChange}
+                            currentLocation={{ lat: watch('latitude') || initialCenter.lat, lng: watch('longitude') || initialCenter.lng }}
+                          />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center bg-muted text-muted-foreground">
+                            {mapError ? <span className='text-destructive p-4'>{mapError}</span> : <Loader2 className="h-8 w-8 animate-spin" />}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="h-[200px] w-full rounded-lg border border-dashed flex items-center justify-center bg-secondary/30">
+                        <div className="text-center p-6">
+                          <MapPin className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">
+                            Location tracking disabled for offline registration
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            You can add the GPS location later when editing this family
+                          </p>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </FormControl>
+
+                  {/* Untracked Location Toggle Button */}
+                  <div className="mt-3">
+                    <Button
+                      type="button"
+                      variant={isLocationUntracked ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        const newUntrackedState = !isLocationUntracked;
+                        setIsLocationUntracked(newUntrackedState);
+                        setValue('locationUntracked', newUntrackedState);
+
+                        if (newUntrackedState) {
+                          // Clear location values when marking as untracked
+                          setValue('latitude', undefined);
+                          setValue('longitude', undefined);
+                        }
+                      }}
+                      className="w-full sm:w-auto"
+                    >
+                      <MapPin className="mr-2 h-4 w-4" />
+                      {isLocationUntracked ? 'Enable Location Tracking' : 'Mark as Untracked (Offline Mode)'}
+                    </Button>
+                  </div>
+
                   <FormMessage />
                 </FormItem>
               )}
@@ -650,44 +720,47 @@ export function RegisterHouseholdForm() {
             <input type="file" accept="image/*" ref={familyPhotoInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'family')} />
             <input type="file" accept="image/*" ref={housePhotoInputRef} className="hidden" onChange={(e) => handleFileUpload(e, 'house')} />
 
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* FAMILY PHOTO */}
-              <div className="space-y-4">
-                <FormLabel>Family Photo</FormLabel>
-                <div className="border-dashed border-2 rounded-lg aspect-video flex items-center justify-center bg-secondary/30 overflow-hidden">
-                  {familyPhotoUrl ? (
-                    <Image src={familyPhotoUrl} alt="Family" width={600} height={400} className="w-full h-full object-cover" />
-                  ) : <span>No photo</span>}
-                </div>
-                <div className="flex justify-center gap-2">
-                  <Button type="button" variant="outline" className="w-full" onClick={() => familyPhotoInputRef.current?.click()}>
-                    <Upload className="mr-2 h-4 w-4" /> Upload
-                  </Button>
-                  {familyPhotoUrl && (
-                    <Button type="button" variant="destructive" onClick={() => cancelPhoto('family')}>
-                      <XCircle className="mr-2 h-4 w-4" /> Cancel
+            <div className="space-y-4">
+              <OfflineWarning compact message="Photos cannot be uploaded while offline. You can add them later." />
+              <div className="grid md:grid-cols-2 gap-8">
+                {/* FAMILY PHOTO */}
+                <div className="space-y-4">
+                  <FormLabel>Family Photo</FormLabel>
+                  <div className="border-dashed border-2 rounded-lg aspect-video flex items-center justify-center bg-secondary/30 overflow-hidden">
+                    {familyPhotoUrl ? (
+                      <Image src={familyPhotoUrl} alt="Family" width={600} height={400} className="w-full h-full object-cover" />
+                    ) : <span>No photo</span>}
+                  </div>
+                  <div className="flex justify-center gap-2">
+                    <Button type="button" variant="outline" className="w-full" onClick={() => familyPhotoInputRef.current?.click()}>
+                      <Upload className="mr-2 h-4 w-4" /> Upload
                     </Button>
-                  )}
+                    {familyPhotoUrl && (
+                      <Button type="button" variant="destructive" onClick={() => cancelPhoto('family')}>
+                        <XCircle className="mr-2 h-4 w-4" /> Cancel
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              {/* HOUSE PHOTO */}
-              <div className="space-y-4">
-                <FormLabel>House Photo</FormLabel>
-                <div className="border-dashed border-2 rounded-lg aspect-video flex items-center justify-center bg-secondary/30 overflow-hidden">
-                  {housePhotoUrl ? (
-                    <Image src={housePhotoUrl} alt="House" width={600} height={400} className="w-full h-full object-cover" />
-                  ) : <span>No photo</span>}
-                </div>
-                <div className="flex justify-center gap-2">
-                  <Button type="button" variant="outline" className="w-full" onClick={() => housePhotoInputRef.current?.click()}>
-                    <Upload className="mr-2 h-4 w-4" /> Upload
-                  </Button>
-                  {housePhotoUrl && (
-                    <Button type="button" variant="destructive" onClick={() => cancelPhoto('house')}>
-                      <XCircle className="mr-2 h-4 w-4" /> Cancel
+                {/* HOUSE PHOTO */}
+                <div className="space-y-4">
+                  <FormLabel>House Photo</FormLabel>
+                  <div className="border-dashed border-2 rounded-lg aspect-video flex items-center justify-center bg-secondary/30 overflow-hidden">
+                    {housePhotoUrl ? (
+                      <Image src={housePhotoUrl} alt="House" width={600} height={400} className="w-full h-full object-cover" />
+                    ) : <span>No photo</span>}
+                  </div>
+                  <div className="flex justify-center gap-2">
+                    <Button type="button" variant="outline" className="w-full" onClick={() => housePhotoInputRef.current?.click()}>
+                      <Upload className="mr-2 h-4 w-4" /> Upload
                     </Button>
-                  )}
+                    {housePhotoUrl && (
+                      <Button type="button" variant="destructive" onClick={() => cancelPhoto('house')}>
+                        <XCircle className="mr-2 h-4 w-4" /> Cancel
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -727,17 +800,21 @@ export function RegisterHouseholdForm() {
                 <Button type="button" variant="secondary" onClick={handleBack}>Back</Button>
               ) : <div></div>}
 
-              <Button type="button" onClick={handleNext} disabled={isSubmitting}>
-                {isSubmitting && step === steps.length ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {step < steps.length ? (
+              {step < steps.length ? (
+                <Button type="button" onClick={handleNext} disabled={isSubmitting}>
+                  {isSubmitting && step === steps.length ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   <>
                     {nextButtonLabels[step - 1]} <ArrowRight className="ml-2 h-4 w-4" />
                   </>
-                ) : (
-                  isSubmitting ? 'Submitting...' : nextButtonLabels[step - 1]
-                )}
-              </Button>
+                </Button>
+              ) : (
+                <Button type="submit" size="lg" className="font-headline bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
+                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isSubmitting ? 'Registering...' : 'Complete Registration'}
+                </Button>
+              )}
             </div>
+            <OfflineWarning className="mt-4" />
           </form>
         </CardContent>
       </Card>

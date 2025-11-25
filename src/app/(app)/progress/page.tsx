@@ -10,15 +10,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ProgressAnalysis } from '@/components/genai/progress-analysis';
-import {
-  ArrowUp,
-  ArrowDown,
-  Loader2,
-  Users,
-  Minus,
-  HelpCircle,
-} from 'lucide-react';
+import { ArrowUp, ArrowDown, Loader2, Users, Minus, HelpCircle } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -141,10 +133,6 @@ export default function ProgressTrackingPage() {
           </Card>
         </div>
 
-        {/* AI Analysis Section */}
-        <ProgressAnalysis />
-
-        {/* Child List */}
         <Card>
           <CardHeader>
             <CardTitle>{t('child_list')}</CardTitle>
