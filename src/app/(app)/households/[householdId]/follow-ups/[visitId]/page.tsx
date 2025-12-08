@@ -51,7 +51,9 @@ const StatCard = ({ title, value, icon: Icon, color, isLoading }: {
 
 function FollowUpsDetailsContent() {
   const { t } = useLanguage();
-  const { household, visits, isLoading } = useFollowUpLogic(new Date().getFullYear());
+  const { households, visits, isLoading } = useFollowUpLogic(new Date().getFullYear());
+
+  const household = households?.[0]; // Get first household for display
 
   const now = new Date();
 
@@ -97,12 +99,12 @@ function FollowUpsDetailsContent() {
 
       {/* ===================== OVERDUE + UPCOMING ===================== */}
       <div className="grid gap-4 md:grid-cols-2">
-        
+
         {/* -------- Overdue Visits -------- */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-red-500" /> 
+              <AlertCircle className="h-5 w-5 text-red-500" />
               {t("overdue_visits")} ({overdue.length})
             </CardTitle>
           </CardHeader>

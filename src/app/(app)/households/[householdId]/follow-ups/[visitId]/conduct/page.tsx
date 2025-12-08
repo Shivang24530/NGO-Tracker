@@ -65,7 +65,7 @@ export default function ConductVisitPage() {
 
           snapshot.forEach(doc => {
             const data = doc.data() as ChildProgressUpdate;
-            updates.push({ id: doc.id, ...data });
+            updates.push({ ...data, id: doc.id });
           });
         }
 

@@ -8,7 +8,7 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { doc, writeBatch, collection, getDocs } from 'firebase/firestore';
-import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useFirestore, useFirebaseApp, useUser } from '@/firebase';
 import { LocationPicker } from '@/components/map/location-picker';
 import { Button } from '@/components/ui/button';
@@ -311,6 +311,17 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
       if (familyPhotoFile) {
         if (navigator.onLine) {
           try {
+            // Delete old photo if it exists
+            if (household.familyPhotoUrl) {
+              try {
+                const storage = getStorage(firebaseApp);
+                const oldPhotoRef = storageRef(storage, `households/${household.id}/familyPhoto.jpg`);
+                await deleteObject(oldPhotoRef);
+              } catch (err) {
+                console.log('Old family photo not found or already deleted');
+              }
+            }
+
             finalFamilyPhotoUrl = await uploadImage(familyPhotoFile, `households/${household.id}/familyPhoto.jpg`);
           } catch (err) {
             console.error("Family photo upload failed:", err);
@@ -331,6 +342,17 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
       if (housePhotoFile) {
         if (navigator.onLine) {
           try {
+            // Delete old photo if it exists
+            if (household.housePhotoUrl) {
+              try {
+                const storage = getStorage(firebaseApp);
+                const oldPhotoRef = storageRef(storage, `households/${household.id}/housePhoto.jpg`);
+                await deleteObject(oldPhotoRef);
+              } catch (err) {
+                console.log('Old house photo not found or already deleted');
+              }
+            }
+
             finalHousePhotoUrl = await uploadImage(housePhotoFile, `households/${household.id}/housePhoto.jpg`);
           } catch (err) {
             console.error("House photo upload failed:", err);
@@ -560,7 +582,7 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
               <div key={field.id} className="border p-4 rounded-lg space-y-4 relative bg-background">
                 <div className="grid md:grid-cols-3 gap-4">
                   <FormField control={form.control} name={`children.${index}.name`} render={({ field }) => <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
-                  <FormField control={form.control} name={`children.${index}.dateOfBirth`} render={({ field }) => <FormItem><FormLabel>Date of Birth</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>} />
+                  <FormField control={form.control} name={`children.${index}.dateOfBirth`} render={({ field }) => <FormItem><FormLabel>Date of Birth</FormLabel><FormControl><Input type="date" {...field} className="dark:[color-scheme:dark]" /></FormControl><FormMessage /></FormItem>} />
                   <FormField control={form.control} name={`children.${index}.gender`} render={({ field }) => <FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select><FormMessage /></FormItem>} />
                 </div>
                 <FormField
@@ -609,7 +631,7 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
               <div className="space-y-4 p-4 border rounded-lg bg-secondary/30">
                 <div className="grid md:grid-cols-3 gap-4">
                   <FormField control={form.control} name="newChildName" render={({ field }) => <FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="Child's full name" {...field} value={field.value || ''} /></FormControl></FormItem>} />
-                  <FormField control={form.control} name="newChildDateOfBirth" render={({ field }) => <FormItem><FormLabel>Date of Birth</FormLabel><FormControl><Input type="date" {...field} value={field.value || ''} /></FormControl></FormItem>} />
+                  <FormField control={form.control} name="newChildDateOfBirth" render={({ field }) => <FormItem><FormLabel>Date of Birth</FormLabel><FormControl><Input type="date" {...field} value={field.value || ''} className="dark:[color-scheme:dark]" /></FormControl></FormItem>} />
                   <FormField control={form.control} name="newChildGender" render={({ field }) => <FormItem><FormLabel>Gender</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select></FormItem>} />
                 </div>
                 <FormField

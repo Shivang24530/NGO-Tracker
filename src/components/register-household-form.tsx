@@ -133,6 +133,7 @@ export function RegisterHouseholdForm() {
   const { user } = useUser();
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [userReadyToSubmit, setUserReadyToSubmit] = useState(false); // Prevent auto-submit
   const [initialCenter, setInitialCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [isLocationUntracked, setIsLocationUntracked] = useState(false);
@@ -185,16 +186,38 @@ export function RegisterHouseholdForm() {
       watchId = navigator.geolocation.watchPosition(
         (position) => {
           if (isMounted) {
-            const { latitude, longitude } = position.coords;
+            const { latitude, longitude, accuracy } = position.coords;
+
+            // Only use location if accuracy is reasonable (< 100 meters)
+            if (accuracy > 100) {
+              console.warn(`GPS accuracy too low: ${accuracy}m. Waiting for better signal...`);
+              return;
+            }
+
+            // Only set initial center once
             if (!initialCenter) {
               setInitialCenter({ lat: latitude, lng: longitude });
             }
+
+            // Always update form values with latest accurate position
             setValue('latitude', latitude);
             setValue('longitude', longitude);
           }
         },
-        () => fallbackToDefaultLocation(),
-        { enableHighAccuracy: true }
+        (error) => {
+          // Permission denied is expected if user blocks location
+          if (error.code === error.PERMISSION_DENIED) {
+            console.log('Location permission denied. Using default location.');
+          } else {
+            console.error('Geolocation error:', error.message);
+          }
+          fallbackToDefaultLocation();
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,        // Wait max 10 seconds for position
+          maximumAge: 30000      // Accept cached position if < 30 seconds old
+        }
       );
     } else {
       fallbackToDefaultLocation();
@@ -204,9 +227,11 @@ export function RegisterHouseholdForm() {
       isMounted = false;
       if (watchId) navigator.geolocation.clearWatch(watchId);
     };
-  }, [apiKey, setValue, initialCenter]);
+  }, [apiKey, setValue]); // ✅ FIXED: Removed initialCenter from dependencies
 
   const handleNext = async () => {
+    console.log('handleNext called, current step:', step, 'steps.length:', steps.length);
+
     let isValid = true;
     if (step === 1) isValid = await form.trigger(steps[0].fields);
     else if (step === 2) isValid = await form.trigger(steps[1].fields);
@@ -220,8 +245,14 @@ export function RegisterHouseholdForm() {
       return;
     }
 
-    if (step < steps.length) setStep(step + 1);
-    else await form.handleSubmit(onSubmit)();
+    if (step < steps.length) {
+      console.log('Moving to next step:', step + 1);
+      setUserReadyToSubmit(false); // Reset on step change
+      setStep(step + 1);
+    } else {
+      console.log('Submitting form from handleNext');
+      await form.handleSubmit(onSubmit)();
+    }
   };
 
   const handleBack = () => setStep(step - 1);
@@ -312,6 +343,7 @@ export function RegisterHouseholdForm() {
   };
 
   async function onSubmit(values: FormData) {
+    console.log('🔴 onSubmit called!', new Error().stack);
     setIsSubmitting(true);
 
     if (!user) {
@@ -615,7 +647,13 @@ export function RegisterHouseholdForm() {
                   <FormField control={form.control} name={`children.${index}.dateOfBirth`} render={({ field }) => (
                     <FormItem>
                       <FormLabel>Date of Birth</FormLabel>
-                      <FormControl><Input type="date" {...field} /></FormControl>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          {...field}
+                          className="dark:[color-scheme:dark]"
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -793,7 +831,60 @@ export function RegisterHouseholdForm() {
         </CardHeader>
 
         <CardContent>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          <form
+            onSubmit={(e) => {
+              console.log('📝 Form onSubmit event triggered', e.nativeEvent);
+              e.preventDefault(); // Always prevent default form submission
+
+              // CRITICAL: Only allow if user has clicked the submit button
+              if (!userReadyToSubmit && step === 3) {
+                console.log('❌ Blocked submission - user has not clicked submit button yet');
+                return;
+              }
+
+              // CRITICAL: Only allow submission on step 3
+              if (step !== 3) {
+                console.log('❌ Blocked submission - not on final step (step:', step, ')');
+                return;
+              }
+
+              // CRITICAL: Prevent double submission
+              if (isSubmitting) {
+                console.log('❌ Blocked submission - already submitting');
+                return;
+              }
+
+              // Check if this is a legitimate button click
+              const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement;
+              console.log('Submitter:', submitter, 'Type:', submitter?.type, 'Disabled:', submitter?.disabled);
+
+              // Block if button is disabled
+              if (submitter?.disabled) {
+                console.log('❌ Blocked submission - button is disabled');
+                return;
+              }
+
+              // Only proceed if submitted via the submit button
+              if (submitter && submitter.type === 'submit') {
+                console.log('✅ Calling form.handleSubmit');
+                form.handleSubmit(onSubmit)(e);
+              } else {
+                console.log('❌ Blocked submission - no valid submitter');
+              }
+            }}
+            className="space-y-8"
+            onKeyDown={(e) => {
+              // Prevent Enter key from submitting form or triggering buttons
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+              }
+            }}
+          >
+            {/* Hidden button to prevent implicit form submission on Enter */}
+            <button type="button" disabled style={{ display: 'none' }} aria-hidden="true" />
+
             {renderStepContent()}
             <div className="flex justify-between mt-12">
               {step > 1 ? (
@@ -808,7 +899,16 @@ export function RegisterHouseholdForm() {
                   </>
                 </Button>
               ) : (
-                <Button type="submit" size="lg" className="font-headline bg-green-600 hover:bg-green-700" disabled={isSubmitting}>
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="font-headline bg-green-600 hover:bg-green-700"
+                  disabled={isSubmitting}
+                  onClick={() => {
+                    console.log('🖱️ Submit button clicked by user');
+                    setUserReadyToSubmit(true);
+                  }}
+                >
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {isSubmitting ? 'Registering...' : 'Complete Registration'}
                 </Button>

@@ -1,14 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   images: {
-    unoptimized: true, // Disable image optimization to prevent 412 errors with Firebase Storage
     remotePatterns: [
       // existing allowed domains
       {

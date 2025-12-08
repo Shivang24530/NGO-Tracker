@@ -136,3 +136,92 @@ Require stack:
 └─────────────────────────┴───────────────┴─────────────────────┘
 Issues? Report them at https://github.com/firebase/firebase-tools/issues and attach the *-debug.log files.
  
+[info] i  firestore: Change detected, updating rules... 
+[debug] [2025-12-08T08:48:38.282Z] >>> [apiv2][query] PUT http://127.0.0.1:8085/emulator/v1/projects/demo-no-project:securityRules [none]
+[debug] [2025-12-08T08:48:38.282Z] >>> [apiv2][body] PUT http://127.0.0.1:8085/emulator/v1/projects/demo-no-project:securityRules {"ignore_errors":true,"rules":{"files":[{"name":"security.rules","content":"rules_version = '2';\n\nservice cloud.firestore {\n  match /databases/{database}/documents {\n\n    // Helper functions\n    function isSignedIn() {\n      return request.auth != null;\n    }\n\n    // Checks if the user is the owner of the provided document.\n    // The `doc` parameter is the result of a get() call or the `resource` variable.\n    function isOwner(doc) {\n      return isSignedIn() && request.auth.uid == doc.data.ownerId;\n    }\n\n    // households/{householdId}\n    match /households/{householdId} {\n      // Any authenticated user can create a household, as long as they are the owner.\n      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;\n      \n      // Any authenticated user (admin/field worker) can read all household data.\n      allow read: if isSignedIn();\n\n      // Only the original creator can update or delete their household document.\n      allow update, delete: if isOwner(resource);\n      \n      // Children subcollection\n      match /children/{childId} {\n        // Any authenticated user can manage child data.\n        allow read, write: if isSignedIn();\n      }\n      \n      // FollowUpVisits subcollection\n      match /followUpVisits/{visitId} {\n        // Any authenticated user can manage follow-up visits.\n        allow read, write: if isSignedIn();\n      }\n\n      // ChildProgressUpdates nested subcollection\n      match /children/{childId}/childProgressUpdates/{updateId} {\n        // Any authenticated user can manage progress updates.\n        allow read, write: if isSignedIn();\n      }\n    }\n\n    // This rule allows a user to perform a collection group query on 'children'\n    match /{path=**}/children/{childId} {\n      allow read: if isSignedIn();\n    }\n  }\n}\n"}]}}
+[debug] [2025-12-08T08:48:38.302Z] Dec 08, 2025 2:18:38 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+INFO: Detected non-HTTP/2 connection.
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Dec 08, 2025 2:18:38 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\nINFO: Detected non-HTTP/2 connection.\n"}}
+[debug] [2025-12-08T08:48:38.389Z] Dec 08, 2025 2:18:38 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead
+INFO: Detected HTTP/2 connection.
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Dec 08, 2025 2:18:38 PM io.gapi.emulators.netty.HttpVersionRoutingHandler channelRead\nINFO: Detected HTTP/2 connection.\n"}}
+[debug] [2025-12-08T08:48:38.682Z] <<< [apiv2][status] PUT http://127.0.0.1:8085/emulator/v1/projects/demo-no-project:securityRules 200
+[debug] [2025-12-08T08:48:38.682Z] <<< [apiv2][body] PUT http://127.0.0.1:8085/emulator/v1/projects/demo-no-project:securityRules {}
+[info] ✔  firestore: Rules updated. 
+[info] i  storage: Change detected, updating rules for Cloud Storage... {"metadata":{"emulator":{"name":"storage"},"message":"Change detected, updating rules for Cloud Storage..."}}
+[debug] [2025-12-08T08:50:25.575Z] File /Users/shivangmittal/Downloads/Ngo_project_working3/functions/package-lock.json changed, reloading triggers {"metadata":{"emulator":{"name":"functions"},"message":"File /Users/shivangmittal/Downloads/Ngo_project_working3/functions/package-lock.json changed, reloading triggers"}}
+[debug] [2025-12-08T08:50:26.578Z] Validating nodejs source
+[warn] ⚠  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory. 
+[debug] [2025-12-08T08:50:27.280Z] > [functions] package.json contents: {
+  "name": "functions",
+  "scripts": {
+    "lint": "echo no-lint",
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "24"
+  },
+  "main": "lib/index.js",
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "firebase-admin": "^13.6.0",
+    "firebase-functions": "^7.0.0"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.12.0",
+    "@typescript-eslint/parser": "^5.12.0",
+    "eslint": "^8.9.0",
+    "eslint-config-google": "^0.14.0",
+    "eslint-plugin-import": "^2.25.4",
+    "firebase-functions-test": "^3.4.1",
+    "typescript": "^5.7.3"
+  },
+  "private": true
+}
+[error] ⬢  functions: Failed to load function definition from source: FirebaseError: There was an error reading functions/package.json:
+
+ functions/lib/index.js does not exist, can't deploy Cloud Functions {"metadata":{"emulator":{"name":"functions"},"message":"Failed to load function definition from source: FirebaseError: There was an error reading functions/package.json:\n\n functions/lib/index.js does not exist, can't deploy Cloud Functions"}}
+[debug] [2025-12-08T08:50:35.659Z] File /Users/shivangmittal/Downloads/Ngo_project_working3/functions/src/index.ts changed, reloading triggers {"metadata":{"emulator":{"name":"functions"},"message":"File /Users/shivangmittal/Downloads/Ngo_project_working3/functions/src/index.ts changed, reloading triggers"}}
+[debug] [2025-12-08T08:50:36.661Z] Validating nodejs source
+[warn] ⚠  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory. 
+[debug] [2025-12-08T08:50:37.073Z] > [functions] package.json contents: {
+  "name": "functions",
+  "scripts": {
+    "lint": "echo no-lint",
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "24"
+  },
+  "main": "lib/index.js",
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "firebase-admin": "^13.6.0",
+    "firebase-functions": "^7.0.0"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.12.0",
+    "@typescript-eslint/parser": "^5.12.0",
+    "eslint": "^8.9.0",
+    "eslint-config-google": "^0.14.0",
+    "eslint-plugin-import": "^2.25.4",
+    "firebase-functions-test": "^3.4.1",
+    "typescript": "^5.7.3"
+  },
+  "private": true
+}
+[error] ⬢  functions: Failed to load function definition from source: FirebaseError: There was an error reading functions/package.json:
+
+ functions/lib/index.js does not exist, can't deploy Cloud Functions {"metadata":{"emulator":{"name":"functions"},"message":"Failed to load function definition from source: FirebaseError: There was an error reading functions/package.json:\n\n functions/lib/index.js does not exist, can't deploy Cloud Functions"}}

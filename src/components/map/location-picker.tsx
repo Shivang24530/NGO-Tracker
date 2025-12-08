@@ -35,9 +35,11 @@ export function LocationPicker({ apiKey, initialCenter, onLocationChange, curren
     }
   };
 
-  const handleMapClick = (e: google.maps.MapMouseEvent) => {
-    if (e.latLng) {
-      const newPos = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+  const handleMapClick = (e: any) => {
+    // @vis.gl/react-google-maps uses a different event type
+    const latLng = e.detail?.latLng;
+    if (latLng) {
+      const newPos = { lat: latLng.lat, lng: latLng.lng };
       setMarkerPosition(newPos);
       onLocationChange(newPos.lat, newPos.lng);
     }

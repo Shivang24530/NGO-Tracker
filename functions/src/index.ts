@@ -13,7 +13,7 @@ const db = admin.firestore();
  */
 export const updateDashboardStats = onSchedule(
   "every 1 hours",
-  async (_event) => {
+  async (_event: any) => {
     logger.info("Starting scheduled statistics update…");
 
     try {

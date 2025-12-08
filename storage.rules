@@ -1,14 +1,30 @@
-
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow any authenticated user to read and write files.
-    // This is appropriate for an internal app where all users are trusted.
-    // For more granular control, you could restrict writes to specific paths,
-    // e.g., match /households/{householdId}/{fileName}
+    // Helper function to check if user is signed in
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if user owns the household
+    function isHouseholdOwner(householdId) {
+      return isSignedIn() && 
+             firestore.get(/databases/(default)/documents/households/$(householdId)).data.ownerId == request.auth.uid;
+    }
+
+    // Household photos - only owner can write, all authenticated users can read
+    match /households/{householdId}/{fileName} {
+      // All authenticated users can read (for viewing in admin dashboard)
+      allow read: if isSignedIn();
+      
+      // Only the household owner can upload/update/delete photos
+      allow write, delete: if isHouseholdOwner(householdId);
+    }
+
+    // Fallback: deny all other paths
     match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }
