@@ -1,0 +1,138 @@
+[debug] [2025-12-08T07:56:52.913Z] ----------------------------------------------------------------------
+[debug] [2025-12-08T07:56:52.914Z] Command:       /usr/local/bin/node /Users/shivangmittal/.npm-global/bin/firebase emulators:start
+[debug] [2025-12-08T07:56:52.914Z] CLI Version:   14.26.0
+[debug] [2025-12-08T07:56:52.914Z] Platform:      darwin
+[debug] [2025-12-08T07:56:52.914Z] Node Version:  v22.15.0
+[debug] [2025-12-08T07:56:52.915Z] Time:          Mon Dec 08 2025 13:26:52 GMT+0530 (India Standard Time)
+[debug] [2025-12-08T07:56:52.915Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-12-08T07:56:52.915Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2025-12-08T07:56:53.007Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] Failed to authenticate, have you run firebase login?
+[warn] ⚠  emulators: You are not currently authenticated so some features may not work correctly. Please run firebase login to authenticate the CLI. 
+[debug] [2025-12-08T07:56:53.643Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2025-12-08T07:56:53.644Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2025-12-08T07:56:54.778Z] java version "21.0.7" 2025-04-15 LTS
+
+[debug] [2025-12-08T07:56:54.779Z] Java(TM) SE Runtime Environment (build 21.0.7+8-LTS-245)
+Java HotSpot(TM) 64-Bit Server VM (build 21.0.7+8-LTS-245, mixed mode, sharing)
+
+[debug] [2025-12-08T07:56:54.782Z] Parsed Java major version: 21
+[info] i  emulators: Starting emulators: auth, functions, firestore, storage, extensions {"metadata":{"emulator":{"name":"hub"},"message":"Starting emulators: auth, functions, firestore, storage, extensions"}}
+[info] i  emulators: Detected demo project ID "demo-no-project", emulated services will use a demo configuration and attempts to access non-emulated services for this project will fail. {"metadata":{"emulator":{"name":"hub"},"message":"Detected demo project ID \"demo-no-project\", emulated services will use a demo configuration and attempts to access non-emulated services for this project will fail."}}
+[debug] [2025-12-08T07:56:55.071Z] [logging] Logging Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-12-08T07:56:55.071Z] [storage] Storage Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-12-08T07:56:55.071Z] assigned listening specs for emulators {"user":{"ui":[{"address":"127.0.0.1","family":"IPv4","port":4005}],"auth":[{"address":"127.0.0.1","family":"IPv4","port":9099}],"firestore":[{"address":"127.0.0.1","family":"IPv4","port":8085}],"firestore.websocket":[{"address":"127.0.0.1","family":"IPv4","port":9150}],"hub":[{"address":"127.0.0.1","family":"IPv4","port":4400},{"address":"::1","family":"IPv6","port":4400}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4500}],"storage":[{"address":"127.0.0.1","family":"IPv4","port":9199}]},"metadata":{"message":"assigned listening specs for emulators"}}
+[debug] [2025-12-08T07:56:55.073Z] Emulator locator file path: /var/folders/_h/0z_yf79n1l16njvnfxhhr4yc0000gn/T/hub-demo-no-project.json
+[debug] [2025-12-08T07:56:55.073Z] [hub] writing locator at /var/folders/_h/0z_yf79n1l16njvnfxhhr4yc0000gn/T/hub-demo-no-project.json
+[debug] [2025-12-08T07:56:55.074Z] [Extensions] Started Extensions emulator, this is a noop.
+[debug] [2025-12-08T07:56:55.233Z] [functions] Functions Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-12-08T07:56:55.233Z] [eventarc] Eventarc Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-12-08T07:56:55.233Z] [tasks] Cloud Tasks Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-12-08T07:56:55.233Z] late-assigned ports for functions and eventarc emulators {"user":{"ui":[{"address":"127.0.0.1","family":"IPv4","port":4005}],"auth":[{"address":"127.0.0.1","family":"IPv4","port":9099}],"firestore":[{"address":"127.0.0.1","family":"IPv4","port":8085}],"firestore.websocket":[{"address":"127.0.0.1","family":"IPv4","port":9150}],"hub":[{"address":"127.0.0.1","family":"IPv4","port":4400},{"address":"::1","family":"IPv6","port":4400}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4500}],"storage":[{"address":"127.0.0.1","family":"IPv4","port":9199}],"functions":[{"address":"127.0.0.1","family":"IPv4","port":5001}],"eventarc":[{"address":"127.0.0.1","family":"IPv4","port":9299}],"tasks":[{"address":"127.0.0.1","family":"IPv4","port":9499}]},"metadata":{"message":"late-assigned ports for functions and eventarc emulators"}}
+[debug] [2025-12-08T07:56:55.238Z] Ignoring unsupported arg: auto_download {"metadata":{"emulator":{"name":"firestore"},"message":"Ignoring unsupported arg: auto_download"}}
+[debug] [2025-12-08T07:56:55.238Z] Ignoring unsupported arg: single_project_mode_error {"metadata":{"emulator":{"name":"firestore"},"message":"Ignoring unsupported arg: single_project_mode_error"}}
+[debug] [2025-12-08T07:56:55.238Z] Starting Firestore Emulator with command {"binary":"java","args":["-Dgoogle.cloud_firestore.debug_log_level=FINE","-Duser.language=en","-jar","/Users/shivangmittal/.cache/firebase/emulators/cloud-firestore-emulator-v1.19.8.jar","--host","127.0.0.1","--port",8085,"--websocket_port",9150,"--project_id","demo-no-project","--rules","/Users/shivangmittal/Downloads/Ngo_project_working3/firestore.rules","--single_project_mode",true,"--functions_emulator","127.0.0.1:5001"],"optionalArgs":["port","webchannel_port","host","rules","websocket_port","functions_emulator","seed_from_export","project_id","single_project_mode"],"joinArgs":false,"shell":false,"port":8085} {"metadata":{"emulator":{"name":"firestore"},"message":"Starting Firestore Emulator with command {\"binary\":\"java\",\"args\":[\"-Dgoogle.cloud_firestore.debug_log_level=FINE\",\"-Duser.language=en\",\"-jar\",\"/Users/shivangmittal/.cache/firebase/emulators/cloud-firestore-emulator-v1.19.8.jar\",\"--host\",\"127.0.0.1\",\"--port\",8085,\"--websocket_port\",9150,\"--project_id\",\"demo-no-project\",\"--rules\",\"/Users/shivangmittal/Downloads/Ngo_project_working3/firestore.rules\",\"--single_project_mode\",true,\"--functions_emulator\",\"127.0.0.1:5001\"],\"optionalArgs\":[\"port\",\"webchannel_port\",\"host\",\"rules\",\"websocket_port\",\"functions_emulator\",\"seed_from_export\",\"project_id\",\"single_project_mode\"],\"joinArgs\":false,\"shell\":false,\"port\":8085}"}}
+[info] i  firestore: Firestore Emulator logging to firestore-debug.log {"metadata":{"emulator":{"name":"firestore"},"message":"Firestore Emulator logging to \u001b[1mfirestore-debug.log\u001b[22m"}}
+[debug] [2025-12-08T07:56:55.827Z] Dec 08, 2025 1:26:55 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start
+INFO: Started WebSocket server on ws://127.0.0.1:9150
+ {"metadata":{"emulator":{"name":"firestore"},"message":"Dec 08, 2025 1:26:55 PM com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer start\nINFO: Started WebSocket server on ws://127.0.0.1:9150\n"}}
+[debug] [2025-12-08T07:56:55.836Z] API endpoint: http:// {"metadata":{"emulator":{"name":"firestore"},"message":"API endpoint: http://"}}
+[debug] [2025-12-08T07:56:55.837Z] 127.0.0.1:8085
+If you are using a library that supports the FIRESTORE_EMULATOR_HOST environment variable, run:
+
+   export FIRESTORE_EMULATOR_HOST=127.0.0.1:8085
+
+If you are running a Firestore in Datastore Mode project, run:
+
+   export DATASTORE_EMULATOR_HOST=127.0.0.1:8085
+
+Note: Support for Datastore Mode is in preview. If you encounter any bugs please file at https://github.com/firebase/firebase-tools/issues.
+Dev App Server is now running.
+
+ {"metadata":{"emulator":{"name":"firestore"},"message":"127.0.0.1:8085\nIf you are using a library that supports the FIRESTORE_EMULATOR_HOST environment variable, run:\n\n   export FIRESTORE_EMULATOR_HOST=127.0.0.1:8085\n\nIf you are running a Firestore in Datastore Mode project, run:\n\n   export DATASTORE_EMULATOR_HOST=127.0.0.1:8085\n\nNote: Support for Datastore Mode is in preview. If you encounter any bugs please file at https://github.com/firebase/firebase-tools/issues.\nDev App Server is now running.\n\n"}}
+[info] ✔  firestore: Firestore Emulator UI websocket is running on 9150. {"metadata":{"emulator":{"name":"firestore"},"message":"Firestore Emulator UI websocket is running on 9150."}}
+[debug] [2025-12-08T07:56:57.934Z] Ignoring unsupported arg: port {"metadata":{"emulator":{"name":"storage"},"message":"Ignoring unsupported arg: port"}}
+[debug] [2025-12-08T07:56:58.263Z] Temp file directory for storage emulator: /var/folders/_h/0z_yf79n1l16njvnfxhhr4yc0000gn/T/firebase/storage/blobs {"metadata":{"emulator":{"name":"storage"},"message":"Temp file directory for storage emulator: /var/folders/_h/0z_yf79n1l16njvnfxhhr4yc0000gn/T/firebase/storage/blobs"}}
+[debug] [2025-12-08T07:56:58.266Z] [Extensions] Connecting Extensions emulator, this is a noop.
+[info] i  functions: Watching "/Users/shivangmittal/Downloads/Ngo_project_working3/functions" for Cloud Functions... {"metadata":{"emulator":{"name":"functions"},"message":"Watching \"/Users/shivangmittal/Downloads/Ngo_project_working3/functions\" for Cloud Functions..."}}
+[debug] [2025-12-08T07:56:58.269Z] Validating nodejs source
+[warn] ⚠  functions: Couldn't find firebase-functions package in your source code. Have you run 'npm install'? 
+[debug] [2025-12-08T07:56:58.269Z] getFunctionsSDKVersion encountered error: Cannot find module 'firebase-functions'
+Require stack:
+- /Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/deploy/functions/runtimes/node/versioning.js
+- /Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/deploy/functions/runtimes/node/index.js
+- /Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/deploy/functions/runtimes/index.js
+- /Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/deploy/functions/prepare.js
+- /Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/emulator/functionsEmulatorShared.js
+- /Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/emulator/functionsEmulator.js
+- /Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/emulator/controller.js
+- /Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/emulator/commandUtils.js
+- /Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/commands/database-get.js
+- /Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/commands/index.js
+- /Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/index.js
+- /Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/bin/cli.js
+- /Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/bin/firebase.js {"code":"MODULE_NOT_FOUND","requireStack":["/Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/deploy/functions/runtimes/node/versioning.js","/Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/deploy/functions/runtimes/node/index.js","/Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/deploy/functions/runtimes/index.js","/Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/deploy/functions/prepare.js","/Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/emulator/functionsEmulatorShared.js","/Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/emulator/functionsEmulator.js","/Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/emulator/controller.js","/Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/emulator/commandUtils.js","/Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/commands/database-get.js","/Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/commands/index.js","/Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/index.js","/Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/bin/cli.js","/Users/shivangmittal/.npm-global/lib/node_modules/firebase-tools/lib/bin/firebase.js"]}
+[debug] [2025-12-08T07:56:58.270Z] checkFunctionsSDKVersion encountered error: Invalid Version:  {}
+[debug] [2025-12-08T07:56:58.270Z] > [functions] package.json contents: {
+  "name": "functions",
+  "scripts": {
+    "lint": "echo no-lint",
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "24"
+  },
+  "main": "lib/index.js",
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "firebase-admin": "^13.6.0",
+    "firebase-functions": "^7.0.0"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.12.0",
+    "@typescript-eslint/parser": "^5.12.0",
+    "eslint": "^8.9.0",
+    "eslint-config-google": "^0.14.0",
+    "eslint-plugin-import": "^2.25.4",
+    "firebase-functions-test": "^3.4.1",
+    "typescript": "^5.7.3"
+  },
+  "private": true
+}
+[error] ⬢  functions: Failed to load function definition from source: FirebaseError: There was an error reading functions/package.json:
+
+ functions/lib/index.js does not exist, can't deploy Cloud Functions {"metadata":{"emulator":{"name":"functions"},"message":"Failed to load function definition from source: FirebaseError: There was an error reading functions/package.json:\n\n functions/lib/index.js does not exist, can't deploy Cloud Functions"}}
+[debug] [2025-12-08T07:56:58.274Z] Could not find VSCode notification endpoint: FetchError: request to http://localhost:40001/vscode/notify failed, reason: . If you are not running the Firebase Data Connect VSCode extension, this is expected and not an issue.
+[info] 
+┌─────────────────────────────────────────────────────────────┐
+│ ✔  All emulators ready! It is now safe to connect your app. │
+│ i  View Emulator UI at http://127.0.0.1:4005/               │
+└─────────────────────────────────────────────────────────────┘
+
+┌────────────────┬────────────────┬──────────────────────────────────┐
+│ Emulator       │ Host:Port      │ View in Emulator UI              │
+├────────────────┼────────────────┼──────────────────────────────────┤
+│ Authentication │ 127.0.0.1:9099 │ http://127.0.0.1:4005/auth       │
+├────────────────┼────────────────┼──────────────────────────────────┤
+│ Functions      │ 127.0.0.1:5001 │ http://127.0.0.1:4005/functions  │
+├────────────────┼────────────────┼──────────────────────────────────┤
+│ Firestore      │ 127.0.0.1:8085 │ http://127.0.0.1:4005/firestore  │
+├────────────────┼────────────────┼──────────────────────────────────┤
+│ Storage        │ 127.0.0.1:9199 │ http://127.0.0.1:4005/storage    │
+├────────────────┼────────────────┼──────────────────────────────────┤
+│ Extensions     │ 127.0.0.1:5001 │ http://127.0.0.1:4005/extensions │
+└────────────────┴────────────────┴──────────────────────────────────┘
+  Emulator Hub host: 127.0.0.1 port: 4400
+  Other reserved ports: 4500, 9150
+┌─────────────────────────┬───────────────┬─────────────────────┐
+│ Extension Instance Name │ Extension Ref │ View in Emulator UI │
+└─────────────────────────┴───────────────┴─────────────────────┘
+Issues? Report them at https://github.com/firebase/firebase-tools/issues and attach the *-debug.log files.
+ 

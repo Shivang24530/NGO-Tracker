@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   images: {
+    unoptimized: true, // Disable image optimization to prevent 412 errors with Firebase Storage
     remotePatterns: [
       // existing allowed domains
       {

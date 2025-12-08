@@ -28,6 +28,7 @@ import {
   useMemoFirebase,
   errorEmitter,
   FirestorePermissionError,
+  useFirebaseApp,
 } from '@/firebase';
 import type { Household } from '@/lib/types';
 import {
@@ -38,6 +39,11 @@ import {
   query,
   where,
 } from 'firebase/firestore';
+import {
+  getStorage,
+  ref as storageRef,
+  deleteObject,
+} from 'firebase/storage';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,6 +69,7 @@ export default function AllHouseholdsPage() {
   const { t } = useLanguage();
 
   const firestore = useFirestore();
+  const firebaseApp = useFirebaseApp();
   const { user, isUserLoading } = useUser();
   const router = useRouter();
 
@@ -94,12 +101,31 @@ export default function AllHouseholdsPage() {
   }, [households, searchTerm]);
 
   const handleDelete = async (householdId: string, familyName: string) => {
-    if (!firestore || deletingId) return;
+    if (!firestore || !firebaseApp || deletingId) return;
 
     setDeletingId(householdId);
     const householdDocRef = doc(firestore, 'households', householdId);
 
     try {
+      // Delete photos from Firebase Storage first
+      const storage = getStorage(firebaseApp);
+      const familyPhotoRef = storageRef(storage, `households/${householdId}/familyPhoto.jpg`);
+      const housePhotoRef = storageRef(storage, `households/${householdId}/housePhoto.jpg`);
+
+      // Attempt to delete photos (ignore errors if photos don't exist)
+      try {
+        await deleteObject(familyPhotoRef);
+      } catch (err) {
+        console.log('Family photo not found or already deleted');
+      }
+
+      try {
+        await deleteObject(housePhotoRef);
+      } catch (err) {
+        console.log('House photo not found or already deleted');
+      }
+
+      // Now delete Firestore documents
       const batch = writeBatch(firestore);
 
       const childrenSnapshot = await getDocs(collection(householdDocRef, 'children'));
