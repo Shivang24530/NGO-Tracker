@@ -3,10 +3,19 @@ import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
 import { FirebaseClientProvider } from "@/firebase";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { MobileAppHandler } from "@/components/mobile-app-handler";
 
 export const metadata: Metadata = {
   title: "Community Compass",
   description: "NGO Community Tracker for field workers and administrators.",
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 0.85,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover' as const,
 };
 
 export default function RootLayout({
@@ -33,6 +42,7 @@ export default function RootLayout({
         <FirebaseClientProvider>
           {/* 🔥 LANGUAGE CONTEXT WRAPPER ADDED HERE */}
           <LanguageProvider>
+            <MobileAppHandler />
             {children}
           </LanguageProvider>
         </FirebaseClientProvider>

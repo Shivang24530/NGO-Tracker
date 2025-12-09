@@ -157,21 +157,65 @@ function QuarterlyReportContent() {
       }
 
       const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
+      const fileName = `Q${quarterId}_${year}_Report.csv`;
 
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Q${quarterId}_${year}_Report.csv`;
-      a.click();
+      // Check if running in Capacitor (mobile app)
+      if (typeof window !== 'undefined' && (window as any).Capacitor) {
+        try {
+          // Dynamic import for Capacitor Filesystem and Share
+          const { Filesystem, Directory } = await import('@capacitor/filesystem');
+          const { Share } = await import('@capacitor/share');
 
-      toast({ title: 'Report Downloaded' });
+          // Write file to Cache directory first (no permissions needed)
+          const result = await Filesystem.writeFile({
+            path: fileName,
+            data: csv,
+            directory: Directory.Cache,
+            encoding: 'utf8',
+          });
+
+          // Use Share API to let user save the file
+          await Share.share({
+            title: 'Save CSV Report',
+            text: `Quarterly Report ${fileName}`,
+            url: result.uri,
+            dialogTitle: 'Save Report'
+          });
+
+          toast({
+            title: 'Opening Share Dialog',
+            description: 'Choose where to save the file'
+          });
+        } catch (error) {
+          console.error('Capacitor download error:', error);
+          toast({
+            variant: 'destructive',
+            title: 'Download Failed',
+            description: 'Could not save file on mobile. Please try on desktop.'
+          });
+        }
+      } else {
+        // Browser download
+        downloadViaBrowser(csv, fileName);
+      }
     } catch (err) {
       console.error(err);
       toast({ variant: 'destructive', title: 'Download Failed' });
     } finally {
       setIsDownloading(false);
     }
+  };
+
+  // Helper function for browser downloads
+  const downloadViaBrowser = (csv: string, fileName: string) => {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'Report Downloaded' });
   };
 
   const now = new Date();

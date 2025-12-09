@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuth, useUser } from '@/firebase';
+import { useAuth, useUser, useFirestore } from '@/firebase';
 import { reauthenticateWithCredential, updatePassword, updateEmail, EmailAuthProvider } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,9 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { updatePasswordChangedTimestamp } from '@/firebase/auth/user-document';
 
 export default function ChangeCredentialsPage() {
     const auth = useAuth();
+    const firestore = useFirestore();
     const { user } = useUser();
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
@@ -42,11 +44,25 @@ export default function ChangeCredentialsPage() {
 
             // 2. Update Password if provided
             if (newPassword) {
+                // Update Firebase Auth password
                 await updatePassword(user, newPassword);
-                toast({
-                    title: "Success",
-                    description: "Password updated successfully",
-                });
+
+                // Update passwordChangedAt timestamp to invalidate all other sessions
+                try {
+                    await updatePasswordChangedTimestamp(firestore, user.uid);
+                    toast({
+                        title: "Success",
+                        description: "Password updated successfully. All other devices will be logged out.",
+                    });
+                } catch (firestoreError: any) {
+                    // Password was updated in Auth, but Firestore timestamp update failed
+                    console.error("Firestore update failed:", firestoreError);
+                    toast({
+                        title: "Password Updated",
+                        description: "Password changed, but session sync failed. Other devices may stay logged in temporarily.",
+                        variant: "default",
+                    });
+                }
             }
 
             // 3. Update Email if provided
@@ -67,6 +83,7 @@ export default function ChangeCredentialsPage() {
             setNewUsername('');
 
         } catch (error: any) {
+            // These are Auth errors (re-authentication, password update, email update)
             if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
                 toast({
                     variant: "destructive",
@@ -78,6 +95,12 @@ export default function ChangeCredentialsPage() {
                     variant: "destructive",
                     title: "Update Restricted",
                     description: "Server configuration prevents email updates without verification. Please check Firebase Console settings.",
+                });
+            } else if (error.code === 'auth/too-many-requests') {
+                toast({
+                    variant: "destructive",
+                    title: "Too Many Attempts",
+                    description: "Account temporarily locked due to multiple failed attempts. Please try again later.",
                 });
             } else {
                 console.error("Update failed:", error);

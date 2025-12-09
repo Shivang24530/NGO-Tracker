@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Community Compass</string>
+    <string name="title_activity_main">Community Compass</string>
+    <string name="package_name">com.communitycompass.app</string>
+    <string name="custom_url_scheme">com.communitycompass.app</string>
+</resources>

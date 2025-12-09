@@ -17,7 +17,15 @@ export function Toaster() {
     <ToastProvider>
       {toasts.map(function ({ id, title, description, action, ...props }) {
         return (
-          <Toast key={id} {...props}>
+          <Toast
+            key={id}
+            {...props}
+            className={`${props.className || ''}`}
+            style={{
+              marginTop: 'max(env(safe-area-inset-top, 0px), 8px)',
+              ...props.style
+            }}
+          >
             <div className="grid gap-1">
               {title && <ToastTitle>{title}</ToastTitle>}
               {description && (

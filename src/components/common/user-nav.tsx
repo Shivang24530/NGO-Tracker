@@ -24,8 +24,8 @@ export function UserNav() {
 
   const userContent = (
     <>
-      <Avatar className="h-8 w-8">
-        <AvatarFallback>P</AvatarFallback>
+      <Avatar className="h-10 w-10 md:h-8 md:w-8">
+        <AvatarFallback className="text-lg font-bold">P</AvatarFallback>
       </Avatar>
       <div className="text-left group-data-[collapsible=icon]:hidden">
         <p className="text-sm font-medium leading-none text-sidebar-foreground">PACE</p>
@@ -40,11 +40,11 @@ export function UserNav() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         {state === 'collapsed' ? (
-          <Button variant="ghost" className="relative h-10 w-10 p-2 rounded-full">
+          <Button variant="ghost" className="relative h-12 w-12 md:h-10 md:w-10 p-2 rounded-full">
             {userContent}
           </Button>
         ) : (
-          <Button variant="ghost" className="relative h-12 w-full flex justify-start items-center gap-2 p-2">
+          <Button variant="ghost" className="relative h-14 md:h-12 w-full flex justify-start items-center gap-2 p-3 md:p-2">
             {userContent}
           </Button>
         )}

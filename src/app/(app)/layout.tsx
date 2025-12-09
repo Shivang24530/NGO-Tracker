@@ -5,6 +5,7 @@ import {
   SidebarInset,
 } from '@/components/ui/sidebar';
 import { MainNav } from '@/components/common/main-nav';
+import { UserNav } from '@/components/common/user-nav';
 import { useUser } from '@/firebase/auth/use-user';
 import { redirect } from 'next/navigation';
 import { AuthGuard } from '@/components/auth/auth-guard';

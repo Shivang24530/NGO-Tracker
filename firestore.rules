@@ -48,5 +48,11 @@ service cloud.firestore {
     match /{path=**}/children/{childId} {
       allow read: if isSignedIn();
     }
+
+    // users/{userId} - for storing user metadata like passwordChangedAt
+    match /users/{userId} {
+      // Users can only read and write their own user document
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
   }
 }

@@ -246,13 +246,24 @@ export default function AllHouseholdsPage() {
                       <AlertDialog>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                              }}
+                            >
                               <MoreHorizontal className="h-4 w-4" />
                               <span className="sr-only">{t("more_actions")}</span>
                             </Button>
                           </DropdownMenuTrigger>
 
-                          <DropdownMenuContent align="end">
+                          <DropdownMenuContent
+                            align="end"
+                            sideOffset={15}
+                            alignOffset={-30}
+                            className="min-w-[180px]"
+                          >
                             <DropdownMenuItem asChild>
                               <Link href={`/households/${household.id}`}>
                                 <Eye className="mr-2 h-4 w-4" />

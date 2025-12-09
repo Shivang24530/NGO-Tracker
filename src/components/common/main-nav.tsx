@@ -83,12 +83,13 @@ export function MainNav() {
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
-      </SidebarContent>
 
-      <Separator className="my-1 bg-sidebar-border" />
-      <SidebarFooter>
-        <UserNav />
-      </SidebarFooter>
+        {/* Profile section - appears after navigation items */}
+        <div className="mt-4 px-2">
+          <Separator className="mb-4 bg-sidebar-border" />
+          <UserNav />
+        </div>
+      </SidebarContent>
     </>
   );
 }

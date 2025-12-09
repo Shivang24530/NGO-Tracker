@@ -17,9 +17,10 @@ import { useAuth } from '@/firebase';
 import { initiateEmailSignIn } from '@/firebase/non-blocking-login';
 import { useEffect, useState } from 'react';
 import { useUser } from '@/firebase';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -29,8 +30,9 @@ export default function LoginPage() {
   const { t } = useLanguage();
   const { toast } = useToast();
 
-  const [email, setEmail] = useState('priya@example.com');
-  const [password, setPassword] = useState('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isRateLimited, setIsRateLimited] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -40,11 +42,21 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsRateLimited(false); // Reset rate limit banner
     try {
       await initiateEmailSignIn(auth, email, password);
     } catch (error: any) {
       console.error("Login error:", error);
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+
+      if (error.code === 'auth/too-many-requests') {
+        // Show rate limit banner
+        setIsRateLimited(true);
+        toast({
+          variant: "destructive",
+          title: "Account Temporarily Locked",
+          description: "Too many failed login attempts. Please wait 15 minutes before trying again.",
+        });
+      } else if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
         toast({
           variant: "destructive",
           title: "Login Failed",
@@ -70,58 +82,85 @@ export default function LoginPage() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-background to-secondary p-4">
-      <Card className="w-full max-w-md shadow-2xl">
-        <CardHeader className="text-center">
-          <div className="flex justify-center items-center mb-4">
-            <Compass className="w-12 h-12 text-primary" />
-          </div>
-          <CardTitle className="font-headline text-3xl">
-            {t("app_name")}
-          </CardTitle>
-          <CardDescription>
-            {t("login_subtitle")}
-          </CardDescription>
-        </CardHeader>
+      <div className="w-full max-w-md space-y-4">
+        {/* Rate Limit Warning Banner */}
+        {isRateLimited && (
+          <Alert variant="destructive" className="shadow-lg">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Account Temporarily Locked</AlertTitle>
+            <AlertDescription className="mt-2">
+              Too many failed login attempts detected. Your account is temporarily locked for security.
+              <br />
+              <strong className="block mt-2">Please wait 15 minutes before trying again.</strong>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => setIsRateLimited(false)}
+              >
+                Dismiss
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
-        <form onSubmit={handleLogin}>
-          <CardContent className="space-y-4">
-
-            <div className="space-y-2">
-              <Label htmlFor="email" className="font-headline">
-                {t("email")}
-              </Label>
-              <Input
-                id="email"
-                type="text"
-                placeholder={t("email_placeholder")}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+        <Card className="w-full shadow-2xl">
+          <CardHeader className="text-center">
+            <div className="flex justify-center items-center mb-4">
+              <Compass className="w-12 h-12 text-primary" />
             </div>
+            <CardTitle className="font-headline text-3xl">
+              {t("app_name")}
+            </CardTitle>
+            <CardDescription>
+              {t("login_subtitle")}
+            </CardDescription>
+          </CardHeader>
 
-            <div className="space-y-2">
-              <Label htmlFor="password" className="font-headline">
-                {t("password")}
-              </Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
+          <form onSubmit={handleLogin}>
+            <CardContent className="space-y-4">
 
-          </CardContent>
+              <div className="space-y-2">
+                <Label htmlFor="email" className="font-headline">
+                  {t("email")}
+                </Label>
+                <Input
+                  id="email"
+                  type="text"
+                  placeholder={t("email_placeholder")}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
 
-          <CardFooter>
-            <Button type="submit" className="w-full font-headline">
-              {t("login_button")}
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
+              <div className="space-y-2">
+                <Label htmlFor="password" className="font-headline">
+                  {t("password")}
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+
+            </CardContent>
+
+            <CardFooter>
+              <Button
+                type="submit"
+                className="w-full font-headline"
+                disabled={isRateLimited}
+              >
+                {t("login_button")}
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
     </div>
   );
 }

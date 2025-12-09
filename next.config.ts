@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Note: Using server mode for Capacitor because app has dynamic routes
+  // Static export would require generateStaticParams() for all dynamic routes
   images: {
+    unoptimized: true, // Keep unoptimized for mobile performance
     remotePatterns: [
       // existing allowed domains
       {
