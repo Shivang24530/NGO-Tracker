@@ -48,6 +48,7 @@ import { getDocs, collection, query, where } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import type { ChildProgressUpdate } from '@/lib/types';
 import { calculateAge } from '@/lib/utils';
+import { Capacitor } from '@capacitor/core';
 
 function QuarterlyReportContent() {
   const [year, setYear] = useState(new Date().getFullYear());
@@ -163,7 +164,9 @@ function QuarterlyReportContent() {
       const fileName = `Q${quarterId}_${year}_Report.csv`;
 
       // Check if running in Capacitor (mobile app)
-      if (typeof window !== 'undefined' && (window as any).Capacitor) {
+      // Use isNativePlatform() to strictly identify iOS/Android apps
+      // This prevents the desktop web version from triggering the Share dialog
+      if (Capacitor.isNativePlatform()) {
         try {
           // Dynamic import for Capacitor Filesystem and Share
           const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
