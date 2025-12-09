@@ -428,7 +428,9 @@ export function RegisterHouseholdForm() {
         primaryContact: values.primaryContact,
         status: 'Active' as const,
         createdAt: formatISO(new Date()),
-        nextFollowupDue: formatISO(addMonths(new Date(), 3)),
+        // Set nextFollowupDue to TODAY so the first visit is due immediately
+        // This ensures the map shows it as "Upcoming" (Yellow) or "Overdue" (Red) correctly relative to the visit date
+        nextFollowupDue: formatISO(new Date()),
         latitude: values.locationUntracked ? null : (values.latitude ?? null),
         longitude: values.locationUntracked ? null : (values.longitude ?? null),
         locationUntracked: values.locationUntracked || false,
@@ -461,7 +463,16 @@ export function RegisterHouseholdForm() {
       const year = getYear(createdDate);
 
       for (let qNum = createdQuarter; qNum <= 4; qNum++) {
-        const quarterDate = new Date(year, (qNum - 1) * 3 + 1, 15);
+        // For the CURRENT quarter (the one being created now), set the visit date to TODAY
+        // For future quarters, keep the 15th of the middle month
+        let quarterDate: Date;
+
+        if (qNum === createdQuarter) {
+          quarterDate = createdDate;
+        } else {
+          quarterDate = new Date(year, (qNum - 1) * 3 + 1, 15);
+        }
+
         const newVisitRef = doc(visitsColRef);
         batch.set(newVisitRef, {
           id: newVisitRef.id,
