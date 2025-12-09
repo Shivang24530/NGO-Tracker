@@ -6,10 +6,10 @@ const config: CapacitorConfig = {
   webDir: '.next', // Not used in server mode
   server: {
     // For development: point to your Next.js dev server on network
-    url: 'http://192.168.1.9:9002',
-    cleartext: true,
+    // url: 'http://192.168.1.9:9002',
+    // cleartext: true,
     // For production: you'll need to deploy Next.js to a server and use that URL
-    // url: 'https://your-production-url.com',
+    url: 'https://ngo-tracker-nu.vercel.app',
   },
   plugins: {
     SplashScreen: {

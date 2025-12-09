@@ -174,60 +174,54 @@ export function RegisterHouseholdForm() {
     }
 
     let isMounted = true;
-    let watchId: number;
 
-    const fallbackToDefaultLocation = () => {
-      if (isMounted) {
-        setInitialCenter({ lat: 28.7041, lng: 77.1025 });
+    const getCurrentLocation = async () => {
+      try {
+        // Dynamic import for Capacitor Geolocation
+        const { Geolocation } = await import('@capacitor/geolocation');
+
+        // Check permissions first
+        const permissionStatus = await Geolocation.checkPermissions();
+
+        if (permissionStatus.location !== 'granted') {
+          const requestStatus = await Geolocation.requestPermissions();
+          if (requestStatus.location !== 'granted') {
+            console.warn("Location permission denied");
+            if (isMounted && !initialCenter) {
+              setInitialCenter({ lat: 28.7041, lng: 77.1025 });
+            }
+            return;
+          }
+        }
+
+        const position = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 10000,
+        });
+
+        if (isMounted) {
+          const { latitude, longitude } = position.coords;
+          if (!initialCenter) {
+            setInitialCenter({ lat: latitude, lng: longitude });
+          }
+          // Always update form values with latest accurate position
+          setValue('latitude', latitude);
+          setValue('longitude', longitude);
+        }
+      } catch (error) {
+        console.error("Error getting location:", error);
+        if (isMounted && !initialCenter) {
+          setInitialCenter({ lat: 28.7041, lng: 77.1025 });
+        }
       }
     };
 
-    if (navigator.geolocation) {
-      watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          if (isMounted) {
-            const { latitude, longitude, accuracy } = position.coords;
-
-            // Only use location if accuracy is reasonable (< 100 meters)
-            if (accuracy > 100) {
-              console.warn(`GPS accuracy too low: ${accuracy}m. Waiting for better signal...`);
-              return;
-            }
-
-            // Only set initial center once
-            if (!initialCenter) {
-              setInitialCenter({ lat: latitude, lng: longitude });
-            }
-
-            // Always update form values with latest accurate position
-            setValue('latitude', latitude);
-            setValue('longitude', longitude);
-          }
-        },
-        (error) => {
-          // Permission denied is expected if user blocks location
-          if (error.code === error.PERMISSION_DENIED) {
-            console.log('Location permission denied. Using default location.');
-          } else {
-            console.error('Geolocation error:', error.message);
-          }
-          fallbackToDefaultLocation();
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,        // Wait max 10 seconds for position
-          maximumAge: 30000      // Accept cached position if < 30 seconds old
-        }
-      );
-    } else {
-      fallbackToDefaultLocation();
-    }
+    getCurrentLocation();
 
     return () => {
       isMounted = false;
-      if (watchId) navigator.geolocation.clearWatch(watchId);
     };
-  }, [apiKey, setValue]); // ✅ FIXED: Removed initialCenter from dependencies
+  }, [apiKey, setValue]);
 
   const handleNext = async () => {
     console.log('handleNext called, current step:', step, 'steps.length:', steps.length);
