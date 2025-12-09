@@ -87,7 +87,9 @@ export default function MapOverviewPage() {
         const permissionStatus = await Geolocation.checkPermissions();
         if (permissionStatus.location !== 'granted') {
           const requestStatus = await Geolocation.requestPermissions();
-          if (requestStatus.location !== 'granted') {
+          // On web, requestPermissions returns the current status (often 'prompt').
+          // We should only stop if it is explicitly 'denied'.
+          if (requestStatus.location === 'denied') {
             if (isMounted && !center) {
               setCenter({ lat: 28.7041, lng: 77.1025 });
             }

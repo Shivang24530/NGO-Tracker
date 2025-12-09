@@ -185,7 +185,9 @@ export function RegisterHouseholdForm() {
 
         if (permissionStatus.location !== 'granted') {
           const requestStatus = await Geolocation.requestPermissions();
-          if (requestStatus.location !== 'granted') {
+          // On web, requestPermissions returns the current status (often 'prompt').
+          // We should only stop if it is explicitly 'denied'.
+          if (requestStatus.location === 'denied') {
             console.warn("Location permission denied");
             if (isMounted && !initialCenter) {
               setInitialCenter({ lat: 28.7041, lng: 77.1025 });
