@@ -163,7 +163,7 @@ function QuarterlyReportContent() {
       if (typeof window !== 'undefined' && (window as any).Capacitor) {
         try {
           // Dynamic import for Capacitor Filesystem and Share
-          const { Filesystem, Directory } = await import('@capacitor/filesystem');
+          const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
           const { Share } = await import('@capacitor/share');
 
           // Write file to Cache directory first (no permissions needed)
@@ -171,7 +171,7 @@ function QuarterlyReportContent() {
             path: fileName,
             data: csv,
             directory: Directory.Cache,
-            encoding: 'utf8',
+            encoding: Encoding.UTF8,
           });
 
           // Use Share API to let user save the file
