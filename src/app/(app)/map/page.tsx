@@ -29,9 +29,9 @@ export default function MapOverviewPage() {
     () =>
       firestore && user
         ? query(
-            collection(firestore, 'households'),
-            where('ownerId', '==', user.uid)
-          )
+          collection(firestore, 'households'),
+          where('ownerId', '==', user.uid)
+        )
         : null,
     [firestore, user]
   );
@@ -74,36 +74,55 @@ export default function MapOverviewPage() {
   }, [firestore, households]);
 
   // Get user location or fallback
+  // Get user location or fallback
   useEffect(() => {
     let isMounted = true;
-    let watchId: number;
+    let intervalId: NodeJS.Timeout;
 
-    const fallbackToDefaultLocation = () => {
-      if (isMounted) {
-        setCenter({ lat: 28.7041, lng: 77.1025 });
+    const fetchLocation = async () => {
+      try {
+        // Dynamic import for Capacitor Geolocation
+        const { Geolocation } = await import('@capacitor/geolocation');
+
+        const permissionStatus = await Geolocation.checkPermissions();
+        if (permissionStatus.location !== 'granted') {
+          const requestStatus = await Geolocation.requestPermissions();
+          if (requestStatus.location !== 'granted') {
+            if (isMounted && !center) {
+              setCenter({ lat: 28.7041, lng: 77.1025 });
+            }
+            return;
+          }
+        }
+
+        const position = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 10000,
+        });
+
+        if (isMounted) {
+          setCenter({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        }
+      } catch (error) {
+        console.error("Error getting location:", error);
+        if (isMounted && !center) {
+          setCenter({ lat: 28.7041, lng: 77.1025 });
+        }
       }
     };
 
-    if (navigator.geolocation) {
-      watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          if (isMounted) {
-            setCenter({
-              lat: position.coords.latitude,
-              lng: position.coords.longitude,
-            });
-          }
-        },
-        () => fallbackToDefaultLocation(),
-        { enableHighAccuracy: true }
-      );
-    } else {
-      fallbackToDefaultLocation();
-    }
+    // Initial fetch
+    fetchLocation();
+
+    // Update every 2 minutes (120000 ms)
+    intervalId = setInterval(fetchLocation, 120000);
 
     return () => {
       isMounted = false;
-      if (watchId) navigator.geolocation.clearWatch(watchId);
+      if (intervalId) clearInterval(intervalId);
     };
   }, []);
 
