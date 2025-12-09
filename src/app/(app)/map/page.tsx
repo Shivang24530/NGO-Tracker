@@ -81,19 +81,21 @@ export default function MapOverviewPage() {
 
     const fetchLocation = async () => {
       try {
-        // Dynamic import for Capacitor Geolocation
+        // Dynamic import for Capacitor Geolocation and Core
         const { Geolocation } = await import('@capacitor/geolocation');
+        const { Capacitor } = await import('@capacitor/core');
 
-        const permissionStatus = await Geolocation.checkPermissions();
-        if (permissionStatus.location !== 'granted') {
-          const requestStatus = await Geolocation.requestPermissions();
-          // On web, requestPermissions returns the current status (often 'prompt').
-          // We should only stop if it is explicitly 'denied'.
-          if (requestStatus.location === 'denied') {
-            if (isMounted && !center) {
-              setCenter({ lat: 28.7041, lng: 77.1025 });
+        // Only check/request permissions on native platforms (iOS/Android)
+        if (Capacitor.isNativePlatform()) {
+          const permissionStatus = await Geolocation.checkPermissions();
+          if (permissionStatus.location !== 'granted') {
+            const requestStatus = await Geolocation.requestPermissions();
+            if (requestStatus.location !== 'granted') {
+              if (isMounted && !center) {
+                setCenter({ lat: 28.7041, lng: 77.1025 });
+              }
+              return;
             }
-            return;
           }
         }
 

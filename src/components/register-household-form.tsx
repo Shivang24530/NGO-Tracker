@@ -177,22 +177,23 @@ export function RegisterHouseholdForm() {
 
     const getCurrentLocation = async () => {
       try {
-        // Dynamic import for Capacitor Geolocation
+        // Dynamic import for Capacitor Geolocation and Core
         const { Geolocation } = await import('@capacitor/geolocation');
+        const { Capacitor } = await import('@capacitor/core');
 
-        // Check permissions first
-        const permissionStatus = await Geolocation.checkPermissions();
+        // Only check/request permissions on native platforms (iOS/Android)
+        if (Capacitor.isNativePlatform()) {
+          const permissionStatus = await Geolocation.checkPermissions();
 
-        if (permissionStatus.location !== 'granted') {
-          const requestStatus = await Geolocation.requestPermissions();
-          // On web, requestPermissions returns the current status (often 'prompt').
-          // We should only stop if it is explicitly 'denied'.
-          if (requestStatus.location === 'denied') {
-            console.warn("Location permission denied");
-            if (isMounted && !initialCenter) {
-              setInitialCenter({ lat: 28.7041, lng: 77.1025 });
+          if (permissionStatus.location !== 'granted') {
+            const requestStatus = await Geolocation.requestPermissions();
+            if (requestStatus.location !== 'granted') {
+              console.warn("Location permission denied");
+              if (isMounted && !initialCenter) {
+                setInitialCenter({ lat: 28.7041, lng: 77.1025 });
+              }
+              return;
             }
-            return;
           }
         }
 
