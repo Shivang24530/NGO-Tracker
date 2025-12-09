@@ -41,7 +41,13 @@ export type FollowUpVisit = {
   notes?: string;
   status: 'Completed' | 'Pending' | 'Overdue';
   childProgressUpdates?: ChildProgressUpdate[];
+  // Annual survey data (stored per-visit for historical accuracy)
+  toilet_available?: boolean;
+  water_supply?: string;
+  electricity?: boolean;
+  annual_income?: number;
 };
+
 
 // Note: `is_working`, `work_details` are snake_case to match AI model output
 export type ChildProgressUpdate = {
@@ -49,8 +55,11 @@ export type ChildProgressUpdate = {
   child_id: string;
   visitId: string;
   is_studying: boolean;
+  current_class?: string; // Added for historical accuracy
+  school_name?: string; // Added for historical accuracy
   not_studying_reason?: 'Financial Problems' | 'Working' | 'Family Issues' | 'Lack of Interest' | 'Other';
   is_working: boolean;
   work_details?: string;
   studying_challenges?: string;
 };
+

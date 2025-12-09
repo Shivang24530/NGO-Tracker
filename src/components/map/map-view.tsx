@@ -33,12 +33,12 @@ export function MapView({ households, apiKey, center }: MapViewProps) {
     const [selectedHousehold, setSelectedHousehold] = useState<HouseholdWithVisit | null>(null);
 
     const getPinColor = (household: HouseholdWithVisit) => {
-        // A more accurate status based on next follow-up date
-        const isOverdue = isPast(new Date(household.nextFollowupDue));
-
-        if (household.visitStatus === 'Completed' && !isOverdue) {
+        // Prioritize completed status
+        if (household.visitStatus === 'Completed') {
             return '#22c55e'; // green-500
         }
+
+        const isOverdue = isPast(new Date(household.nextFollowupDue));
         if (isOverdue) {
             return '#ef4444'; // red-500
         }
@@ -46,9 +46,10 @@ export function MapView({ households, apiKey, center }: MapViewProps) {
     };
 
     const getStatusText = (household: HouseholdWithVisit) => {
+        if (household.visitStatus === 'Completed') return 'Up-to-date';
+
         const isOverdue = isPast(new Date(household.nextFollowupDue));
         if (isOverdue) return 'Overdue';
-        if (household.visitStatus === 'Completed') return 'Up-to-date';
         return 'Upcoming';
     }
 

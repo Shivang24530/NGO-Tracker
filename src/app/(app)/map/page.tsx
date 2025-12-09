@@ -9,6 +9,7 @@ import { useCollection, useFirestore, useUser, useMemoFirebase } from '@/firebas
 import { collection, query, getDocs, where } from 'firebase/firestore';
 import { useState, useMemo, useEffect } from 'react';
 import { useLanguage } from "@/contexts/LanguageContext";
+import { startOfQuarter, endOfQuarter, isWithinInterval, parseISO } from 'date-fns';
 
 type LatLng = {
   lat: number;
@@ -133,10 +134,27 @@ export default function MapOverviewPage() {
   const householdsWithVisits = useMemo(() => {
     if (!households || !allVisits) return [];
     return households.map((h) => {
-      const visit = allVisits.find((v) => v.householdId === h.id);
+      // Find the visit for the CURRENT QUARTER
+      const now = new Date();
+      const currentQuarterStart = startOfQuarter(now);
+      const currentQuarterEnd = endOfQuarter(now);
+
+      const currentQuarterVisit = allVisits.find((v) => {
+        if (v.householdId !== h.id) return false;
+        const visitDate = parseISO(v.visitDate);
+        return isWithinInterval(visitDate, { start: currentQuarterStart, end: currentQuarterEnd });
+      });
+
+      // Logic:
+      // 1. If current quarter visit is COMPLETED -> Show Completed (Green)
+      // 2. If current quarter visit is PENDING (or missing) -> Show Pending (Yellow/Red based on due date)
+      //    (We pass 'Pending' so the MapView falls back to checking nextFollowupDue)
+
+      const status: 'Completed' | 'Pending' = currentQuarterVisit?.status === 'Completed' ? 'Completed' : 'Pending';
+
       return {
         ...h,
-        visitStatus: visit?.status,
+        visitStatus: status,
       };
     });
   }, [households, allVisits]);

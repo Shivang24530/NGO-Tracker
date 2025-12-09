@@ -131,16 +131,18 @@ function QuarterlyReportContent() {
               age.toString(),
               child.gender,
               progress?.is_studying ? 'Yes' : 'No',
-              progress?.is_studying ? child.currentClass || '' : '',
-              progress?.is_studying ? child.schoolName || '' : '',
+              // Use progress data with fallback to child record for backward compatibility
+              progress?.is_studying ? (progress?.current_class || child.currentClass || '') : '',
+              progress?.is_studying ? (progress?.school_name || child.schoolName || '') : '',
               progress?.is_studying ? '' : progress?.not_studying_reason || '',
               progress?.is_working ? 'Yes' : 'No',
               progress?.is_working ? progress?.work_details || '' : '',
               progress?.studying_challenges || '',
-              isAnnualVisit ? (household.toiletAvailable ? 'Yes' : 'No') : 'N/A',
-              isAnnualVisit ? household.waterSupply || '' : 'N/A',
-              isAnnualVisit ? (household.electricity ? 'Yes' : 'No') : 'N/A',
-              isAnnualVisit ? household.annualIncome?.toString() || '0' : 'N/A',
+              // Use visit data with fallback to household record for backward compatibility
+              isAnnualVisit ? (visit.toilet_available !== undefined ? (visit.toilet_available ? 'Yes' : 'No') : (household.toiletAvailable ? 'Yes' : 'No')) : 'N/A',
+              isAnnualVisit ? (visit.water_supply || household.waterSupply || '') : 'N/A',
+              isAnnualVisit ? (visit.electricity !== undefined ? (visit.electricity ? 'Yes' : 'No') : (household.electricity ? 'Yes' : 'No')) : 'N/A',
+              isAnnualVisit ? (visit.annual_income?.toString() || household.annualIncome?.toString() || '0') : 'N/A',
               format(new Date(visit.visitDate), 'yyyy-MM-dd'),
               visit.visitedBy,
               visit.notes || '',
@@ -268,6 +270,11 @@ function QuarterlyReportContent() {
                 h.familyName.toLowerCase().includes(qSearch) ||
                 h.locationArea.toLowerCase().includes(qSearch)
             );
+
+            // Hide future quarters
+            if (year > currentYear || (year === currentYear && quarter.id > currentQuarterNum)) {
+              return null;
+            }
 
             return (
               <AccordionItem key={quarter.id} value={`item-${quarter.id}`} className="bg-card rounded-lg border mb-2">

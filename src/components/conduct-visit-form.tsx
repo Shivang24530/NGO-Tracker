@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { addMonths, getQuarter, getYear } from 'date-fns';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -185,40 +186,84 @@ export function ConductVisitForm({ visit, household, children, existingUpdates =
                     child_id: update.childId,
                     visitId: visit.id,
                     is_studying: update.isStudying,
+                    current_class: update.currentClass || '', // Added for historical accuracy
+                    school_name: update.schoolName || '', // Added for historical accuracy
                     not_studying_reason: update.notStudyingReason,
                     is_working: update.isWorking,
                     work_details: update.workDetails,
                     studying_challenges: update.studyingChallenges,
                 });
 
-                // Also update the child's main document
-                const childRef = doc(firestore, `households/${household.id}/children/${update.childId}`);
-                const childUpdateData: Partial<Child> = {
-                    isStudying: update.isStudying,
-                };
+                // Also update the child's main document ONLY if it's a current quarter visit
+                // This prevents past data edits from overwriting the child's current status
+                const visitDateObj = new Date(visit.visitDate);
+                const now = new Date();
+                const isCurrentQuarterVisit = getQuarter(visitDateObj) === getQuarter(now) && getYear(visitDateObj) === getYear(now);
 
-                if (update.isStudying) {
-                    childUpdateData.currentClass = update.currentClass || 'N/A';
-                    childUpdateData.schoolName = update.schoolName || 'N/A';
+                if (isCurrentQuarterVisit) {
+                    const childRef = doc(firestore, `households/${household.id}/children/${update.childId}`);
+                    const childUpdateData: Partial<Child> = {
+                        isStudying: update.isStudying,
+                    };
+
+                    if (update.isStudying) {
+                        childUpdateData.currentClass = update.currentClass || 'N/A';
+                        childUpdateData.schoolName = update.schoolName || 'N/A';
+                    }
+
+                    batch.update(childRef, childUpdateData);
                 }
-
-                batch.update(childRef, childUpdateData);
             });
 
-            // 2. Update Household if it's an Annual visit
-            if (visit.visitType === 'Annual' && values.annualSurvey) {
-                const householdRef = doc(firestore, 'households', household.id);
-                batch.update(householdRef, { ...values.annualSurvey });
+            // 2. Update Household
+            const householdRef = doc(firestore, 'households', household.id);
+            const householdUpdateData: any = {};
+
+            const visitDateObj = new Date(visit.visitDate);
+            const now = new Date();
+            const isCurrentQuarterVisit = getQuarter(visitDateObj) === getQuarter(now) && getYear(visitDateObj) === getYear(now);
+
+            // Only update main household record for current quarter annual surveys
+            if (visit.visitType === 'Annual' && values.annualSurvey && isCurrentQuarterVisit) {
+                Object.assign(householdUpdateData, values.annualSurvey);
+            }
+
+            // Calculate next follow-up date (3 months from now)
+            // Only update if this is a NEW completion AND it's for the CURRENT quarter
+            if (visit.status !== 'Completed' && isCurrentQuarterVisit) {
+                const nextDue = addMonths(now, 3);
+                householdUpdateData.nextFollowupDue = nextDue.toISOString();
+            }
+
+            // Only update household if there are changes
+            if (Object.keys(householdUpdateData).length > 0) {
+                batch.update(householdRef, householdUpdateData);
             }
 
             // 3. Update the FollowUpVisit status
             const visitRef = doc(firestore, `households/${household.id}/followUpVisits`, visit.id);
-            batch.update(visitRef, {
+
+            const visitUpdateData: any = {
                 status: 'Completed',
-                visitDate: new Date().toISOString(), // Update to current date when completed
                 visitedBy: values.visitedBy,
                 notes: values.notes,
-            });
+            };
+
+            // Save annual survey data to visit document for historical accuracy
+            if (visit.visitType === 'Annual' && values.annualSurvey) {
+                visitUpdateData.toilet_available = values.annualSurvey.toiletAvailable;
+                visitUpdateData.water_supply = values.annualSurvey.waterSupply;
+                visitUpdateData.electricity = values.annualSurvey.electricity;
+                visitUpdateData.annual_income = values.annualSurvey.annualIncome;
+            }
+
+            // Only update visitDate to 'now' if it's a current quarter visit
+            // For past visits, we keep the original scheduled date to avoid messing up reports
+            if (isCurrentQuarterVisit) {
+                visitUpdateData.visitDate = now.toISOString();
+            }
+
+            batch.update(visitRef, visitUpdateData);
 
             await batch.commit();
 
