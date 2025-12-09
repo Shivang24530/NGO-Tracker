@@ -46,6 +46,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+import { cn } from '@/lib/utils';
 import { Checkbox } from './ui/checkbox';
 
 
@@ -641,18 +642,18 @@ export function EditHouseholdForm({ household, initialChildren }: EditHouseholdF
                     <FormItem className="space-y-3">
                       <FormLabel>Child Status</FormLabel>
                       <FormControl>
-                        <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">
-                          <FormItem className="flex items-center space-x-2 space-y-0">
+                        <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex flex-col space-y-2 sm:flex-row sm:space-x-4 sm:space-y-0">
+                          <FormItem className={cn("flex items-center space-x-2 space-y-0 rounded-md border p-3 cursor-pointer transition-all", field.value === 'Studying' ? "border-primary bg-primary/10" : "border-input hover:bg-accent")}>
                             <FormControl><RadioGroupItem value="Studying" /></FormControl>
-                            <FormLabel className="font-normal">Studying</FormLabel>
+                            <FormLabel className="font-normal cursor-pointer flex-1">Studying</FormLabel>
                           </FormItem>
-                          <FormItem className="flex items-center space-x-2 space-y-0">
+                          <FormItem className={cn("flex items-center space-x-2 space-y-0 rounded-md border p-3 cursor-pointer transition-all", field.value === 'Not Studying' ? "border-primary bg-primary/10" : "border-input hover:bg-accent")}>
                             <FormControl><RadioGroupItem value="Not Studying" /></FormControl>
-                            <FormLabel className="font-normal">Not Studying</FormLabel>
+                            <FormLabel className="font-normal cursor-pointer flex-1">Not Studying</FormLabel>
                           </FormItem>
-                          <FormItem className="flex items-center space-x-2 space-y-0">
+                          <FormItem className={cn("flex items-center space-x-2 space-y-0 rounded-md border p-3 cursor-pointer transition-all", field.value === 'Migrated' ? "border-primary bg-primary/10" : "border-input hover:bg-accent")}>
                             <FormControl><RadioGroupItem value="Migrated" /></FormControl>
-                            <FormLabel className="font-normal">Migrated</FormLabel>
+                            <FormLabel className="font-normal cursor-pointer flex-1">Migrated</FormLabel>
                           </FormItem>
                         </RadioGroup>
                       </FormControl>

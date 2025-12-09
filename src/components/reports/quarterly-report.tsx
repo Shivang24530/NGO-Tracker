@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Accordion,
   AccordionContent,
@@ -416,18 +417,13 @@ function QuarterlyReportContent() {
                                     visitStatus === 'Completed' ? (
                                       <div className="flex items-center justify-end gap-2">
                                         <CheckCircle2 className="text-green-600 h-5 w-5" />
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() =>
-                                            router.push(
-                                              `/households/${household.id}/follow-ups/${visit.id}/conduct`
-                                            )
-                                          }
+                                        <Link
+                                          href={`/households/follow-ups/conduct?householdId=${household.id}&visitId=${visit.id}`}
+                                          className="text-xs text-blue-600 hover:underline"
                                         >
                                           <PenSquare className="h-4 w-4 mr-2" />
                                           Edit
-                                        </Button>
+                                        </Link>
                                       </div>
                                     ) : (
                                       <Button
@@ -435,7 +431,7 @@ function QuarterlyReportContent() {
                                         size="sm"
                                         onClick={() =>
                                           router.push(
-                                            `/households/${household.id}/follow-ups/${visit.id}/conduct`
+                                            `/households/follow-ups/conduct?householdId=${household.id}&visitId=${visit.id}`
                                           )
                                         }
                                       >

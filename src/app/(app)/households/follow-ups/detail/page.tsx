@@ -116,7 +116,7 @@ function FollowUpsDetailsContent() {
               <div className="space-y-4">
                 {overdue.map((visit) => (
                   <Link
-                    href={`/households/${visit.householdId}/follow-ups/${visit.id}/conduct`}
+                    href={`/households/follow-ups/conduct?householdId=${visit.householdId}&visitId=${visit.id}`}
                     key={visit.id}
                     className="block border p-4 rounded-lg hover:bg-secondary"
                   >
@@ -156,7 +156,7 @@ function FollowUpsDetailsContent() {
               <div className="space-y-4">
                 {upcoming.map((visit) => (
                   <Link
-                    href={`/households/${visit.householdId}/follow-ups/${visit.id}/conduct`}
+                    href={`/households/follow-ups/conduct?householdId=${visit.householdId}&visitId=${visit.id}`}
                     key={visit.id}
                     className="block border p-4 rounded-lg hover:bg-secondary"
                   >

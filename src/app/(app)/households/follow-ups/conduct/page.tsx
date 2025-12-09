@@ -6,7 +6,7 @@ import { ConductVisitForm } from '@/components/conduct-visit-form';
 import { useDoc, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import type { FollowUpVisit, Household, Child, ChildProgressUpdate } from '@/lib/types';
 import { doc, collection, query, where, getDocs } from 'firebase/firestore';
-import { useParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useEffect, useState } from 'react';
@@ -14,9 +14,9 @@ import { useEffect, useState } from 'react';
 export default function ConductVisitPage() {
   const { t } = useLanguage();
 
-  const params = useParams();
-  const visitId = params.visitId as string;
-  const householdId = params.householdId as string;
+  const searchParams = useSearchParams();
+  const visitId = searchParams.get('visitId');
+  const householdId = searchParams.get('householdId');
   const firestore = useFirestore();
 
   const visitRef = useMemoFirebase(

@@ -11,7 +11,7 @@ export function GlobalOfflineBanner() {
     return (
         <div className="bg-yellow-500 text-black px-4 py-2 text-center text-sm font-medium flex items-center justify-center gap-2 animate-in slide-in-from-top sticky top-0 z-50 shadow-sm">
             <WifiOff className="h-4 w-4" />
-            <span>The app is offline. Keep refreshing to sync the display after making any changes.</span>
+            <span>The app is offline. Changes will sync automatically when you reconnect.</span>
         </div>
     );
 }

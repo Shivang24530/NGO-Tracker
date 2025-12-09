@@ -132,6 +132,7 @@ export function RegisterHouseholdForm() {
   const firebaseApp = useFirebaseApp();
   const { user } = useUser();
   const [step, setStep] = useState(1);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userReadyToSubmit, setUserReadyToSubmit] = useState(false); // Prevent auto-submit
   const [initialCenter, setInitialCenter] = useState<{ lat: number; lng: number } | null>(null);
@@ -678,19 +679,19 @@ export function RegisterHouseholdForm() {
                       <RadioGroup
                         onValueChange={field.onChange}
                         defaultValue={field.value}
-                        className="flex flex-col space-y-1"
+                        className="flex flex-col space-y-2"
                       >
-                        <FormItem className="flex items-center space-x-3 space-y-0">
+                        <FormItem className={cn("flex items-center space-x-3 space-y-0 rounded-md border p-3 cursor-pointer transition-all", field.value === 'Studying' ? "border-primary bg-primary/10" : "border-input hover:bg-accent")}>
                           <FormControl><RadioGroupItem value="Studying" /></FormControl>
-                          <FormLabel className="font-normal">Studying</FormLabel>
+                          <FormLabel className="font-normal cursor-pointer flex-1">Studying</FormLabel>
                         </FormItem>
-                        <FormItem className="flex items-center space-x-3 space-y-0">
+                        <FormItem className={cn("flex items-center space-x-3 space-y-0 rounded-md border p-3 cursor-pointer transition-all", field.value === 'Not Studying' ? "border-primary bg-primary/10" : "border-input hover:bg-accent")}>
                           <FormControl><RadioGroupItem value="Not Studying" /></FormControl>
-                          <FormLabel className="font-normal">Not Studying</FormLabel>
+                          <FormLabel className="font-normal cursor-pointer flex-1">Not Studying</FormLabel>
                         </FormItem>
-                        <FormItem className="flex items-center space-x-3 space-y-0">
+                        <FormItem className={cn("flex items-center space-x-3 space-y-0 rounded-md border p-3 cursor-pointer transition-all", field.value === 'Migrated' ? "border-primary bg-primary/10" : "border-input hover:bg-accent")}>
                           <FormControl><RadioGroupItem value="Migrated" /></FormControl>
-                          <FormLabel className="font-normal">Migrated</FormLabel>
+                          <FormLabel className="font-normal cursor-pointer flex-1">Migrated</FormLabel>
                         </FormItem>
                       </RadioGroup>
                     </FormControl>
@@ -817,6 +818,7 @@ export function RegisterHouseholdForm() {
 
   return (
     <Form {...form}>
+      <OfflineWarning className="mb-6" />
       <Stepper currentStep={step} />
       <Card className="w-full">
         <CardHeader>
@@ -911,7 +913,7 @@ export function RegisterHouseholdForm() {
                 </Button>
               )}
             </div>
-            <OfflineWarning className="mt-4" />
+
           </form>
         </CardContent>
       </Card>

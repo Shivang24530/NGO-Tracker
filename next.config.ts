@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: 'export',
+  trailingSlash: true,
   // Note: Using server mode for Capacitor because app has dynamic routes
   // Static export would require generateStaticParams() for all dynamic routes
   images: {

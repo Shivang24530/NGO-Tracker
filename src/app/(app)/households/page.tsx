@@ -265,14 +265,14 @@ export default function AllHouseholdsPage() {
                             className="min-w-[180px]"
                           >
                             <DropdownMenuItem asChild>
-                              <Link href={`/households/${household.id}`}>
+                              <Link href={`/households/detail?id=${household.id}`}>
                                 <Eye className="mr-2 h-4 w-4" />
                                 {t("view_details")}
                               </Link>
                             </DropdownMenuItem>
 
                             <DropdownMenuItem asChild>
-                              <Link href={`/households/${household.id}/edit`}>
+                              <Link href={`/households/edit?id=${household.id}`}>
                                 <Pen className="mr-2 h-4 w-4" />
                                 {t("edit")}
                               </Link>

@@ -167,7 +167,7 @@ export default function FollowUpsPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <AlertCircle className="h-5 w-5 text-red-500" /> 
+                    <AlertCircle className="h-5 w-5 text-red-500" />
                     {t("overdue_visits")} ({overdue.length})
                   </CardTitle>
                 </CardHeader>
@@ -177,24 +177,24 @@ export default function FollowUpsPage() {
                       {overdue
                         .filter(v => filteredHouseholds.some(h => h.id === v.householdId))
                         .map((visit) => (
-                        <Link
-                          href={`/households/${visit.householdId}/follow-ups/${visit.id}/conduct`}
-                          key={visit.id}
-                          className="block border p-4 rounded-lg hover:bg-secondary"
-                        >
-                          <div className="flex justify-between items-center">
-                            <p className="font-semibold">
-                              {getHouseholdName(visit.householdId)}
-                            </p>
+                          <Link
+                            href={`/households/follow-ups/conduct?householdId=${visit.householdId}&visitId=${visit.id}`}
+                            key={visit.id}
+                            className="block border p-4 rounded-lg hover:bg-secondary"
+                          >
+                            <div className="flex justify-between items-center">
+                              <p className="font-semibold">
+                                {getHouseholdName(visit.householdId)}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {new Date(visit.visitDate).toLocaleDateString()}
+                              </p>
+                            </div>
                             <p className="text-sm text-muted-foreground">
-                              {new Date(visit.visitDate).toLocaleDateString()}
+                              {getHouseholdLocation(visit.householdId)}
                             </p>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {getHouseholdLocation(visit.householdId)}
-                          </p>
-                        </Link>
-                      ))}
+                          </Link>
+                        ))}
                     </div>
                   ) : (
                     <div className="text-center py-8 text-muted-foreground space-y-2">
@@ -210,7 +210,7 @@ export default function FollowUpsPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-orange-500" /> 
+                    <Clock className="h-5 w-5 text-orange-500" />
                     {t("upcoming_visits")} ({upcoming.length})
                   </CardTitle>
                 </CardHeader>
@@ -220,24 +220,24 @@ export default function FollowUpsPage() {
                       {upcoming
                         .filter(v => filteredHouseholds.some(h => h.id === v.householdId))
                         .map((visit) => (
-                        <Link
-                          href={`/households/${visit.householdId}/follow-ups/${visit.id}/conduct`}
-                          key={visit.id}
-                          className="block border p-4 rounded-lg hover:bg-secondary"
-                        >
-                          <div className="flex justify-between items-center">
-                            <p className="font-semibold">
-                              {getHouseholdName(visit.householdId)}
-                            </p>
+                          <Link
+                            href={`/households/follow-ups/conduct?householdId=${visit.householdId}&visitId=${visit.id}`}
+                            key={visit.id}
+                            className="block border p-4 rounded-lg hover:bg-secondary"
+                          >
+                            <div className="flex justify-between items-center">
+                              <p className="font-semibold">
+                                {getHouseholdName(visit.householdId)}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {new Date(visit.visitDate).toLocaleDateString()}
+                              </p>
+                            </div>
                             <p className="text-sm text-muted-foreground">
-                              {new Date(visit.visitDate).toLocaleDateString()}
+                              {getHouseholdLocation(visit.householdId)}
                             </p>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {getHouseholdLocation(visit.householdId)}
-                          </p>
-                        </Link>
-                      ))}
+                          </Link>
+                        ))}
                     </div>
                   ) : (
                     <div className="text-center py-8 text-muted-foreground space-y-2">
@@ -253,7 +253,7 @@ export default function FollowUpsPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-green-600" /> 
+                  <TrendingUp className="h-5 w-5 text-green-600" />
                   {t("recent_visits")}
                 </CardTitle>
               </CardHeader>
@@ -263,28 +263,28 @@ export default function FollowUpsPage() {
                     {recentVisits
                       .filter(v => filteredHouseholds.some(h => h.id === v.householdId))
                       .map((visit) => (
-                      <div key={visit.id} className="border p-4 rounded-lg">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <p className="font-semibold">
-                              {getHouseholdName(visit.householdId)}
-                            </p>
+                        <div key={visit.id} className="border p-4 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <p className="font-semibold">
+                                {getHouseholdName(visit.householdId)}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {t("by_person")} {visit.visitedBy}
+                              </p>
+                            </div>
                             <p className="text-sm text-muted-foreground">
-                              {t("by_person")} {visit.visitedBy}
+                              {new Date(visit.visitDate).toLocaleDateString()}
                             </p>
                           </div>
-                          <p className="text-sm text-muted-foreground">
-                            {new Date(visit.visitDate).toLocaleDateString()}
-                          </p>
-                        </div>
 
-                        {visit.notes && (
-                          <p className="text-sm text-muted-foreground mt-2 italic">
-                            "{visit.notes}"
-                          </p>
-                        )}
-                      </div>
-                    ))}
+                          {visit.notes && (
+                            <p className="text-sm text-muted-foreground mt-2 italic">
+                              "{visit.notes}"
+                            </p>
+                          )}
+                        </div>
+                      ))}
                   </div>
                 ) : (
                   <p className="text-center py-8 text-muted-foreground">

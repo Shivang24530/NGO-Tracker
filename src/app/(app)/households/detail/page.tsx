@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useDoc, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import type { Household, Child, FollowUpVisit } from '@/lib/types';
 import { doc, collection } from 'firebase/firestore';
@@ -37,8 +37,8 @@ import { calculateAge } from '@/lib/utils';
 export default function HouseholdDetailsPage() {
   const { t } = useLanguage();
 
-  const params = useParams();
-  const householdId = params.householdId as string;
+  const searchParams = useSearchParams();
+  const householdId = searchParams.get('id');
   const firestore = useFirestore();
 
   const householdRef = useMemoFirebase(

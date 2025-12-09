@@ -5,7 +5,7 @@ import { EditHouseholdForm } from '@/components/edit-household-form';
 import { useDoc, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import type { Household, Child } from '@/lib/types';
 import { doc, collection } from 'firebase/firestore';
-import { useParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -13,8 +13,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 export default function EditHouseholdPage() {
   const { t } = useLanguage();
 
-  const params = useParams();
-  const householdId = params.householdId as string;
+  const searchParams = useSearchParams();
+  const householdId = searchParams.get('id');
   const firestore = useFirestore();
 
   const householdRef = useMemoFirebase(
