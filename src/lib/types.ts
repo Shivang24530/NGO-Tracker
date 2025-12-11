@@ -57,7 +57,7 @@ export type ChildProgressUpdate = {
   is_studying: boolean;
   current_class?: string; // Added for historical accuracy
   school_name?: string; // Added for historical accuracy
-  not_studying_reason?: 'Financial Problems' | 'Working' | 'Family Issues' | 'Lack of Interest' | 'Other';
+  not_studying_reason?: 'Financial Problems' | 'Working' | 'Family Issues' | 'Lack of Interest' | 'Health Issues' | 'Never Enrolled' | 'Other';
   is_working: boolean;
   work_details?: string;
   studying_challenges?: string;

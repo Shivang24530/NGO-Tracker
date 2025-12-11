@@ -377,6 +377,7 @@ export function ConductVisitForm({ visit, household, children, existingUpdates =
                                                             <SelectItem value="Family Issues">Family Issues</SelectItem>
                                                             <SelectItem value="Lack of Interest">Lack of Interest</SelectItem>
                                                             <SelectItem value="Health Issues">Health Issues</SelectItem>
+                                                            <SelectItem value="Never Enrolled">Never Enrolled</SelectItem>
                                                             <SelectItem value="Other">Other</SelectItem>
                                                         </SelectContent>
                                                     </Select>
