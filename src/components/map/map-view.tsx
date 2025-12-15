@@ -6,7 +6,7 @@ import type { Household, FollowUpVisit } from '@/lib/types';
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { isPast } from 'date-fns';
+import { isPast, isSameDay } from 'date-fns';
 
 type LatLng = {
     lat: number;
@@ -38,7 +38,8 @@ export function MapView({ households, apiKey, center }: MapViewProps) {
             return '#22c55e'; // green-500
         }
 
-        const isOverdue = isPast(new Date(household.nextFollowupDue));
+        const dueDate = new Date(household.nextFollowupDue);
+        const isOverdue = isPast(dueDate) && !isSameDay(dueDate, new Date());
         if (isOverdue) {
             return '#ef4444'; // red-500
         }
@@ -48,7 +49,8 @@ export function MapView({ households, apiKey, center }: MapViewProps) {
     const getStatusText = (household: HouseholdWithVisit) => {
         if (household.visitStatus === 'Completed') return 'Up-to-date';
 
-        const isOverdue = isPast(new Date(household.nextFollowupDue));
+        const dueDate = new Date(household.nextFollowupDue);
+        const isOverdue = isPast(dueDate) && !isSameDay(dueDate, new Date());
         if (isOverdue) return 'Overdue';
         return 'Upcoming';
     }
@@ -92,9 +94,9 @@ export function MapView({ households, apiKey, center }: MapViewProps) {
                             position={{ lat: selectedHousehold.latitude, lng: selectedHousehold.longitude }}
                             onCloseClick={() => setSelectedHousehold(null)}
                         >
-                            <div className="p-2 w-64">
+                            <div className="p-2 w-64 text-black">
                                 <h3 className="font-bold text-base font-headline">{selectedHousehold.familyName}</h3>
-                                <p className="text-sm text-muted-foreground">{selectedHousehold.fullAddress}</p>
+                                <p className="text-sm text-gray-500">{selectedHousehold.fullAddress}</p>
                                 <div className="mt-2">
                                     <span className="font-semibold">Visit Status: </span>
                                     <Badge variant={getStatusText(selectedHousehold) === "Overdue" ? "destructive" : "secondary"}>

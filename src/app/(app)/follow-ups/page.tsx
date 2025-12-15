@@ -78,7 +78,7 @@ export default function FollowUpsPage() {
     ) ?? [];
 
   const upcoming =
-    visits?.filter((v) => v.status === 'Pending' && !isPast(new Date(v.visitDate))) ?? [];
+    visits?.filter((v) => v.status === 'Pending' && (!isPast(new Date(v.visitDate)) || isSameDay(new Date(v.visitDate), now))) ?? [];
 
   const completed = visits?.filter((v) => v.status === 'Completed') ?? [];
 
